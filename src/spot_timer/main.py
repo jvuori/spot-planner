@@ -3,62 +3,50 @@ from decimal import Decimal
 from typing import Sequence
 
 
-def _is_valid_min_period(
-    combination: tuple[tuple[int, Decimal], ...], min_period: int
+def _is_valid_combination(
+    combination: tuple[tuple[int, Decimal], ...],
+    min_period: int,
+    max_gap: int,
+    max_start_gap: int,
+    full_length: int,
 ) -> bool:
-    # Extract indices and sort them
-    indices = sorted(index for index, _ in combination)
-    if not indices:
+    if not combination:
         return False
 
+    # Items are already sorted, so indices are in order
+    indices = [index for index, _ in combination]
+
+    # Check max_start_gap first (fastest check)
+    if indices[0] > max_start_gap:
+        return False
+
+    # Check start gap
+    if indices[0] > max_gap:
+        return False
+
+    # Check gaps between consecutive indices and min_period in single pass
     block_length = 1
     for i in range(1, len(indices)):
+        gap = indices[i] - indices[i - 1] - 1
+        if gap > max_gap:
+            return False
+
         if indices[i] == indices[i - 1] + 1:
             block_length += 1
         else:
             if block_length < min_period:
                 return False
             block_length = 1
-    # Check the last block
+
+    # Check last block min_period
     if block_length < min_period:
         return False
-    return True
 
-
-def _is_valid_max_gap(
-    combination: tuple[tuple[int, Decimal], ...], max_gap: int, full_length: int
-) -> bool:
-    # Extract and sort indices
-    indices = sorted(index for index, _ in combination)
-    if not indices:
-        return False
-
-    # Check the gap at the start
-    if indices[0] > max_gap:
-        return False
-
-    # Check gaps between consecutive indices
-    for i in range(1, len(indices)):
-        gap = indices[i] - indices[i - 1] - 1
-        if gap > max_gap:
-            return False
-
-    # Check the gap at the end
+    # Check end gap
     if (full_length - 1 - indices[-1]) > max_gap:
         return False
 
     return True
-
-
-def _is_valid_max_start_gap(
-    combination: tuple[tuple[int, Decimal], ...], max_start_gap: int
-) -> bool:
-    # Check that the gap (difference in indices) between the first item in the combination
-    # and the max_start_gap does not exceed max_start_gap. If it does, it returns False.
-    # Otherwise, it returns True.
-    if not combination:
-        return False
-    return combination[0][0] <= max_start_gap
 
 
 def _get_combination_cost(combination: tuple[tuple[int, Decimal], ...]) -> Decimal:
@@ -88,11 +76,13 @@ def get_cheapest_periods(
 
     while not cheapest_price_item_combination:
         for price_item_combination in itertools.combinations(price_items, actual_count):
-            if not _is_valid_min_period(price_item_combination, min_period):
-                continue
-            if not _is_valid_max_gap(price_item_combination, max_gap, len(price_items)):
-                continue
-            if not _is_valid_max_start_gap(price_item_combination, max_start_gap):
+            if not _is_valid_combination(
+                price_item_combination,
+                min_period,
+                max_gap,
+                max_start_gap,
+                len(price_items),
+            ):
                 continue
             combination_cost = _get_combination_cost(price_item_combination)
             if combination_cost < cheapest_cost:

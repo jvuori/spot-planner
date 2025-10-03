@@ -86,9 +86,15 @@ def test_desired_count_is_zero():
     ],
 )
 def test_is_valid_min_period(indices: list[int], min_period: int, expected: bool):
+    # Test min_period validation by setting other constraints to be permissive
+    combination = tuple([(index, Decimal("47")) for index in indices])
+    max_gap = 100  # Very permissive
+    max_start_gap = 100  # Very permissive
+    full_length = max(indices) + 10 if indices else 10  # Large enough
+
     assert (
-        main._is_valid_min_period(
-            tuple([(index, Decimal("47")) for index in indices]), min_period
+        main._is_valid_combination(
+            combination, min_period, max_gap, max_start_gap, full_length
         )
         == expected
     )
@@ -120,9 +126,14 @@ def test_is_valid_min_period(indices: list[int], min_period: int, expected: bool
 def test_is_valid_max_gap(
     indices: list[int], max_gap: int, full_length: int, expected: bool
 ):
+    # Test max_gap validation by setting other constraints to be permissive
+    combination = tuple([(index, Decimal("47")) for index in indices])
+    min_period = 1  # Very permissive
+    max_start_gap = 100  # Very permissive
+
     assert (
-        main._is_valid_max_gap(
-            tuple([(index, Decimal("47")) for index in indices]), max_gap, full_length
+        main._is_valid_combination(
+            combination, min_period, max_gap, max_start_gap, full_length
         )
         == expected
     )
@@ -139,9 +150,27 @@ def test_is_valid_max_gap(
     ],
 )
 def test_is_valid_max_start_gap(indices: list[int], max_start_gap: int, expected: bool):
+    # Test max_start_gap validation by setting other constraints to be permissive
+    combination = tuple([(index, Decimal("47")) for index in indices])
+    min_period = 1  # Very permissive
+    max_gap = 100  # Very permissive
+    full_length = max(indices) + 10 if indices else 10  # Large enough
+
     assert (
-        main._is_valid_max_start_gap(
-            tuple([(index, Decimal("47")) for index in indices]), max_start_gap
+        main._is_valid_combination(
+            combination, min_period, max_gap, max_start_gap, full_length
         )
         == expected
+    )
+
+
+def test_performance():
+    price_data = [Decimal(f"{i}") for i in range(24)]
+    main.get_cheapest_periods(
+        price_data=price_data,
+        price_threshold=Decimal("10"),
+        desired_count=12,
+        min_period=1,
+        max_gap=1,
+        max_start_gap=1,
     )
