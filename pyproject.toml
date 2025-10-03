@@ -1,0 +1,19 @@
+[project]
+name = "spot-timer"
+version = "0.1.0"
+description = "Algorithm for finding the cheapest periods in a sequence of prices"
+readme = "README.md"
+authors = [
+    { name = "Jaakko Vuori", email = "jaakko.vuori@gmail.com" }
+]
+requires-python = ">=3.13"
+dependencies = []
+
+[build-system]
+requires = ["uv_build>=0.8.19,<0.9.0"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "pytest>=8.4.2",
+]
