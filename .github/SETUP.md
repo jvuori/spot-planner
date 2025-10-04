@@ -5,28 +5,38 @@ This guide explains how to set up the GitHub Actions workflow for building and p
 ## Prerequisites
 
 1. **PyPI Account**: You need a PyPI account to publish packages
-2. **PyPI API Token**: Generate an API token for automated publishing
+2. **PyPI Project**: The project must be registered on PyPI
 3. **GitHub Repository**: The code must be in a GitHub repository
 
 ## Setup Steps
 
-### 1. Create PyPI API Token
+### 1. Configure PyPI OIDC Trusted Publishing
 
 1. Go to [PyPI](https://pypi.org) and log in
 2. Navigate to Account Settings → API tokens
 3. Click "Add API token"
-4. Give it a name like "spot-planner-publish"
-5. Set scope to "Entire account" (or create a specific project scope)
-6. Copy the token (it starts with `pypi-`)
+4. Select "Create a token for trusted publishing"
+5. Configure the trusted publisher:
+   - **PyPI project name**: `spot-planner`
+   - **Owner**: Your GitHub username or organization
+   - **Repository name**: `spot-planner`
+   - **Workflow filename**: `publish.yml`
+   - **Environment name**: `pypi` (optional)
+6. Click "Add token"
 
-### 2. Add PyPI Token to GitHub Secrets
+### 2. Create PyPI Environment
 
 1. Go to your GitHub repository
-2. Navigate to Settings → Secrets and variables → Actions
-3. Click "New repository secret"
-4. Name: `PYPI_API_TOKEN`
-5. Value: Paste your PyPI API token
-6. Click "Add secret"
+2. Navigate to Settings → Environments
+3. Click "New environment"
+4. Name: `pypi`
+5. Click "Configure environment"
+
+**Optional Environment Protection:**
+
+- **Required reviewers**: Add team members who must approve PyPI releases
+- **Wait timer**: Add a delay before publishing (useful for rollback)
+- **Deployment branches**: Restrict which branches can trigger publishing
 
 ### 3. Test the Workflow
 
@@ -106,12 +116,13 @@ maturin build --release --target aarch64-unknown-linux-gnu
 # Build source distribution
 uv build --sdist
 
-# Upload to PyPI
-UV_PUBLISH_TOKEN=your_token uv publish dist/*
+# Upload to PyPI (requires API token for manual upload)
+uv publish dist/*
 ```
 
 ## Security Notes
 
-- The `PYPI_API_TOKEN` secret is only accessible to the repository
-- Tokens should be rotated regularly
-- Use project-scoped tokens when possible instead of account-wide tokens
+- **OIDC Authentication**: No long-lived tokens stored in GitHub secrets
+- **Trusted Publishing**: PyPI verifies the GitHub Actions workflow and environment
+- **Automatic Rotation**: OIDC tokens are short-lived and automatically rotated
+- **Least Privilege**: Only the specific repository and workflow can publish
