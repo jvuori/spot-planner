@@ -26,12 +26,11 @@ classifiers = [
     "Topic :: Software Development :: Libraries :: Python Modules",
     "Typing :: Typed",
 ]
-project-urls = {
-    "Homepage" = "https://github.com/jvuori/spot-planner",
-    "Bug Reports" = "https://github.com/jvuori/spot-planner/issues",
-    "Source" = "https://github.com/jvuori/spot-planner",
-    "Documentation" = "https://github.com/jvuori/spot-planner#readme",
-}
+[project.urls]
+Homepage = "https://github.com/jvuori/spot-planner"
+"Bug Reports" = "https://github.com/jvuori/spot-planner/issues"
+Source = "https://github.com/jvuori/spot-planner"
+Documentation = "https://github.com/jvuori/spot-planner#readme"
 
 [build-system]
 requires = ["maturin>=1.0,<2.0"]
