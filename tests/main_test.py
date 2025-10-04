@@ -2,7 +2,7 @@ from decimal import Decimal
 
 import pytest
 
-from spot_timer import main
+from spot_timer.main import _is_valid_combination, get_cheapest_periods
 
 PRICE_DATA = [
     Decimal("50"),  # 0
@@ -18,7 +18,7 @@ PRICE_DATA = [
 
 
 def test_desired_count_is_same_as_for_price_threshold():
-    periods = main.get_cheapest_periods(
+    periods = get_cheapest_periods(
         price_data=PRICE_DATA,
         price_threshold=Decimal("20"),
         desired_count=3,
@@ -30,7 +30,7 @@ def test_desired_count_is_same_as_for_price_threshold():
 
 
 def test_desired_count_is_greater_than_for_price_threshold():
-    periods = main.get_cheapest_periods(
+    periods = get_cheapest_periods(
         price_data=PRICE_DATA,
         price_threshold=Decimal("10"),
         desired_count=3,
@@ -42,7 +42,7 @@ def test_desired_count_is_greater_than_for_price_threshold():
 
 
 def test_desired_count_is_less_than_for_min_period():
-    periods = main.get_cheapest_periods(
+    periods = get_cheapest_periods(
         price_data=PRICE_DATA,
         price_threshold=Decimal("10"),
         desired_count=1,
@@ -54,7 +54,7 @@ def test_desired_count_is_less_than_for_min_period():
 
 
 def test_desired_count_is_zero():
-    periods = main.get_cheapest_periods(
+    periods = get_cheapest_periods(
         price_data=PRICE_DATA,
         price_threshold=Decimal("10"),
         desired_count=0,
@@ -93,7 +93,7 @@ def test_is_valid_min_period(indices: list[int], min_period: int, expected: bool
     full_length = max(indices) + 10 if indices else 10  # Large enough
 
     assert (
-        main._is_valid_combination(
+        _is_valid_combination(
             combination, min_period, max_gap, max_start_gap, full_length
         )
         == expected
@@ -132,7 +132,7 @@ def test_is_valid_max_gap(
     max_start_gap = 100  # Very permissive
 
     assert (
-        main._is_valid_combination(
+        _is_valid_combination(
             combination, min_period, max_gap, max_start_gap, full_length
         )
         == expected
@@ -157,7 +157,7 @@ def test_is_valid_max_start_gap(indices: list[int], max_start_gap: int, expected
     full_length = max(indices) + 10 if indices else 10  # Large enough
 
     assert (
-        main._is_valid_combination(
+        _is_valid_combination(
             combination, min_period, max_gap, max_start_gap, full_length
         )
         == expected
@@ -166,7 +166,7 @@ def test_is_valid_max_start_gap(indices: list[int], max_start_gap: int, expected
 
 def test_performance():
     price_data = [Decimal(f"{i}") for i in range(24)]
-    main.get_cheapest_periods(
+    get_cheapest_periods(
         price_data=price_data,
         price_threshold=Decimal("10"),
         desired_count=12,

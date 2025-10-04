@@ -2,6 +2,14 @@ import itertools
 from decimal import Decimal
 from typing import Sequence
 
+# Import the Rust implementation
+try:
+    from . import spot_timer as _rust_module
+
+    _RUST_AVAILABLE = True
+except ImportError:
+    _RUST_AVAILABLE = False
+
 
 def _is_valid_combination(
     combination: tuple[tuple[int, Decimal], ...],
@@ -53,7 +61,7 @@ def _get_combination_cost(combination: tuple[tuple[int, Decimal], ...]) -> Decim
     return sum(price for _, price in combination) or Decimal("0")
 
 
-def get_cheapest_periods(
+def _get_cheapest_periods_python(
     price_data: Sequence[Decimal],
     price_threshold: Decimal,
     desired_count: int,
@@ -104,3 +112,41 @@ def get_cheapest_periods(
     cheapest_price_item_combination = tuple(merged_combination)
 
     return [i for i, _ in cheapest_price_item_combination]
+
+
+def get_cheapest_periods(
+    price_data: Sequence[Decimal],
+    price_threshold: Decimal,
+    desired_count: int,
+    min_period: int,
+    max_gap: int,
+    max_start_gap: int,
+) -> list[int]:
+    """
+    Find the cheapest periods in a sequence of prices.
+
+    This function uses a Rust implementation for better performance,
+    with a Python fallback if the Rust module is not available.
+    """
+    if _RUST_AVAILABLE:
+        # Use Rust implementation - convert Decimal objects to strings
+        price_data_str = [str(price) for price in price_data]
+        price_threshold_str = str(price_threshold)
+        return _rust_module.get_cheapest_periods(
+            price_data_str,
+            price_threshold_str,
+            desired_count,
+            min_period,
+            max_gap,
+            max_start_gap,
+        )
+    else:
+        # Fallback to Python implementation
+        return _get_cheapest_periods_python(
+            price_data,
+            price_threshold,
+            desired_count,
+            min_period,
+            max_gap,
+            max_start_gap,
+        )
