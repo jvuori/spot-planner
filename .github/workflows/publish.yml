@@ -1,0 +1,164 @@
+name: Build and Publish
+
+on:
+  push:
+    branches: [master]
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  check-tag:
+    runs-on: ubuntu-latest
+    outputs:
+      is_tagged: ${{ steps.check.outputs.is_tagged }}
+      tag: ${{ steps.check.outputs.tag }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # Fetch full history for tag detection
+
+      - name: Check if this is a tagged release
+        id: check
+        run: |
+          if git describe --exact-match --tags HEAD 2>/dev/null; then
+            echo "is_tagged=true" >> $GITHUB_OUTPUT
+            echo "tag=$(git describe --exact-match --tags HEAD)" >> $GITHUB_OUTPUT
+          else
+            echo "is_tagged=false" >> $GITHUB_OUTPUT
+          fi
+
+  build-wheels:
+    needs: check-tag
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        target: [x86_64-unknown-linux-gnu, aarch64-unknown-linux-gnu]
+        include:
+          - target: x86_64-unknown-linux-gnu
+            platform: linux-x86_64
+          - target: aarch64-unknown-linux-gnu
+            platform: linux-aarch64
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Install cross-compilation dependencies (ARM)
+        if: matrix.target == 'aarch64-unknown-linux-gnu'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-aarch64-linux-gnu
+          rustup target add aarch64-unknown-linux-gnu
+
+      - name: Install maturin
+        uses: baptiste0928/cargo-install@v1
+        with:
+          crate: maturin
+          version: latest
+
+      - name: Update version from tag
+        if: needs.check-tag.outputs.is_tagged == 'true'
+        run: |
+          TAG_VERSION=${{ needs.check-tag.outputs.tag }}
+          # Remove 'v' prefix if present
+          TAG_VERSION=${TAG_VERSION#v}
+          echo "Updating version to $TAG_VERSION"
+
+          # Update pyproject.toml
+          sed -i "s/^version = \".*\"/version = \"$TAG_VERSION\"/" pyproject.toml
+
+          # Update Cargo.toml
+          sed -i "s/^version = \".*\"/version = \"$TAG_VERSION\"/" Cargo.toml
+
+          echo "Updated version to $TAG_VERSION"
+
+      - name: Build wheel
+        env:
+          TARGET: ${{ matrix.target }}
+        run: |
+          if [ "$TARGET" = "x86_64-unknown-linux-gnu" ]; then
+            maturin build --release --target $TARGET --out dist
+          else
+            # For ARM64, we need to set the linker
+            export CC_aarch64_unknown_linux_gnu=aarch64-linux-gnu-gcc
+            export CXX_aarch64_unknown_linux_gnu=aarch64-linux-gnu-g++
+            maturin build --release --target $TARGET --out dist
+          fi
+
+      - name: Upload wheel artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: wheel-${{ matrix.platform }}
+          path: dist/*.whl
+
+  publish:
+    needs: [check-tag, build-wheels]
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/master' && needs.check-tag.outputs.is_tagged == 'true'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download all wheel artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          version: "latest"
+
+      - name: Build source distribution
+        run: uv build --sdist
+
+      - name: Publish to PyPI
+        env:
+          UV_PUBLISH_TOKEN: ${{ secrets.PYPI_API_TOKEN }}
+        run: |
+          # Upload all wheels and source distribution
+          uv publish dist/*
+
+  test-build:
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/master'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install maturin
+        uses: baptiste0928/cargo-install@v1
+        with:
+          crate: maturin
+          version: latest
+
+      - name: Build in development mode
+        run: maturin develop --release
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          version: "latest"
+
+      - name: Install Python dependencies
+        run: uv sync --dev
+
+      - name: Run tests
+        run: uv run pytest tests/ -v
+
+      - name: Test import
+        run: |
+          uv run python -c "from spot_planner import get_cheapest_periods; print('Import successful')"
