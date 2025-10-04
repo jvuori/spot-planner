@@ -121,6 +121,8 @@ jobs:
             # For ARM64, we need to set the linker and use uv's Python
             export CC_aarch64_unknown_linux_gnu=aarch64-linux-gnu-gcc
             export CXX_aarch64_unknown_linux_gnu=aarch64-linux-gnu-g++
+            export AR_aarch64_unknown_linux_gnu=aarch64-linux-gnu-ar
+            export RANLIB_aarch64_unknown_linux_gnu=aarch64-linux-gnu-ranlib
             
             # Create a virtual environment with uv and activate it
             uv venv --python 3.13
@@ -131,17 +133,17 @@ jobs:
             echo "Using Python at: $PYTHON_PATH"
             python --version
             
-            # Try different approaches for cross-compilation
-            # Method 1: Try with the full path first
-            echo "Trying with full path..."
-            if maturin build --release --target $TARGET --out dist -i "$PYTHON_PATH" 2>/dev/null; then
-              echo "Success with full path"
-            else
-              echo "Full path failed, trying with interpreter name..."
-              # Method 2: Create a symlink with the expected name
-              sudo ln -sf "$PYTHON_PATH" /usr/local/bin/python3.13
-              maturin build --release --target $TARGET --out dist -i python3.13
-            fi
+            # Create a symlink with the expected name for maturin
+            sudo ln -sf "$PYTHON_PATH" /usr/local/bin/python3.13
+            
+            # Set up cargo config for cross-compilation
+            mkdir -p .cargo
+            echo '[target.aarch64-unknown-linux-gnu]' > .cargo/config.toml
+            echo 'linker = "aarch64-linux-gnu-gcc"' >> .cargo/config.toml
+            echo 'ar = "aarch64-linux-gnu-ar"' >> .cargo/config.toml
+            
+            # Build with the interpreter name maturin expects for cross-compilation
+            maturin build --release --target $TARGET --out dist -i python3.13
           fi
 
       - name: Upload wheel artifacts
