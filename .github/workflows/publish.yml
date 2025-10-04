@@ -5,6 +5,10 @@ on:
     branches: [master]
   workflow_dispatch:
 
+permissions:
+  id-token: write
+  contents: read
+
 env:
   CARGO_TERM_COLOR: always
 

@@ -24,6 +24,8 @@ This guide explains how to set up the GitHub Actions workflow for building and p
    - **Environment name**: `pypi` (optional)
 6. Click "Add token"
 
+**Note**: The workflow includes the required `id-token: write` permission for OIDC authentication.
+
 ### 2. Create PyPI Environment
 
 1. Go to your GitHub repository
