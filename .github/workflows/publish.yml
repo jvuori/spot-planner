@@ -57,10 +57,19 @@ jobs:
           path: |
             ~/.cargo/registry
             ~/.cargo/git
+            ~/.cargo/bin
           key: ${{ runner.os }}-cargo-${{ matrix.target }}-${{ hashFiles('**/Cargo.lock') }}
           restore-keys: |
             ${{ runner.os }}-cargo-${{ matrix.target }}-
             ${{ runner.os }}-cargo-
+
+      - name: Cache maturin
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo/bin/maturin
+          key: ${{ runner.os }}-maturin-1.9.5
+          restore-keys: |
+            ${{ runner.os }}-maturin-
 
       - name: Install cross-compilation dependencies (ARM)
         if: matrix.target == 'aarch64-unknown-linux-gnu'
@@ -71,8 +80,15 @@ jobs:
 
       - name: Install maturin
         run: |
-          # Use a specific version and add timeout to avoid cancellation
-          timeout 600 cargo install maturin --version 1.9.5 --locked --force
+          # Check if maturin is already cached
+          if command -v maturin &> /dev/null; then
+            echo "maturin already installed, skipping installation"
+            maturin --version
+          else
+            echo "Installing maturin..."
+            # Use a specific version and add timeout to avoid cancellation
+            timeout 600 cargo install maturin --version 1.9.5 --locked --force
+          fi
 
       - name: Update version from tag
         if: needs.check-tag.outputs.is_tagged == 'true'
@@ -90,10 +106,10 @@ jobs:
 
           echo "Updated version to $TAG_VERSION"
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
         with:
-          python-version: "3.13"
+          version: "latest"
 
       - name: Build wheel
         env:
@@ -102,18 +118,12 @@ jobs:
           if [ "$TARGET" = "x86_64-unknown-linux-gnu" ]; then
             maturin build --release --target $TARGET --out dist
           else
-            # For ARM64, we need to set the linker and specify Python
+            # For ARM64, we need to set the linker and use uv's Python
             export CC_aarch64_unknown_linux_gnu=aarch64-linux-gnu-gcc
             export CXX_aarch64_unknown_linux_gnu=aarch64-linux-gnu-g++
             
-            # Debug Python setup
-            echo "Available Python interpreters:"
-            which python3
-            python3 --version
-            echo "Python path: ${{ env.pythonLocation }}"
-            
-            # Use the Python interpreter from GitHub Actions setup
-            PYTHON_PATH=$(which python3)
+            # Use uv to get the Python interpreter
+            PYTHON_PATH=$(uv python find 3.13)
             echo "Using Python at: $PYTHON_PATH"
             
             # Build with explicit Python interpreter
@@ -140,11 +150,6 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           path: dist
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.13"
 
       - name: Install uv
         uses: astral-sh/setup-uv@v3
@@ -176,20 +181,31 @@ jobs:
           path: |
             ~/.cargo/registry
             ~/.cargo/git
+            ~/.cargo/bin
           key: ${{ runner.os }}-cargo-test-${{ hashFiles('**/Cargo.lock') }}
           restore-keys: |
             ${{ runner.os }}-cargo-test-
             ${{ runner.os }}-cargo-
 
+      - name: Cache maturin
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo/bin/maturin
+          key: ${{ runner.os }}-maturin-1.9.5
+          restore-keys: |
+            ${{ runner.os }}-maturin-
+
       - name: Install maturin
         run: |
-          # Use a specific version and add timeout to avoid cancellation
-          timeout 600 cargo install maturin --version 1.9.5 --locked --force
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.13"
+          # Check if maturin is already cached
+          if command -v maturin &> /dev/null; then
+            echo "maturin already installed, skipping installation"
+            maturin --version
+          else
+            echo "Installing maturin..."
+            # Use a specific version and add timeout to avoid cancellation
+            timeout 600 cargo install maturin --version 1.9.5 --locked --force
+          fi
 
       - name: Install uv
         uses: astral-sh/setup-uv@v3
