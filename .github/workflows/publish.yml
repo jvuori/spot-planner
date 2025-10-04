@@ -122,12 +122,26 @@ jobs:
             export CC_aarch64_unknown_linux_gnu=aarch64-linux-gnu-gcc
             export CXX_aarch64_unknown_linux_gnu=aarch64-linux-gnu-g++
             
-            # Use uv to get the Python interpreter
-            PYTHON_PATH=$(uv python find 3.13)
-            echo "Using Python at: $PYTHON_PATH"
+            # Create a virtual environment with uv and activate it
+            uv venv --python 3.13
+            source .venv/bin/activate
             
-            # Build with explicit Python interpreter
-            maturin build --release --target $TARGET --out dist -i "$PYTHON_PATH"
+            # Get the Python interpreter path from the venv
+            PYTHON_PATH=$(which python)
+            echo "Using Python at: $PYTHON_PATH"
+            python --version
+            
+            # Try different approaches for cross-compilation
+            # Method 1: Try with the full path first
+            echo "Trying with full path..."
+            if maturin build --release --target $TARGET --out dist -i "$PYTHON_PATH" 2>/dev/null; then
+              echo "Success with full path"
+            else
+              echo "Full path failed, trying with interpreter name..."
+              # Method 2: Create a symlink with the expected name
+              sudo ln -sf "$PYTHON_PATH" /usr/local/bin/python3.13
+              maturin build --release --target $TARGET --out dist -i python3.13
+            fi
           fi
 
       - name: Upload wheel artifacts
