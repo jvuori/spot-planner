@@ -51,6 +51,17 @@ jobs:
         with:
           targets: ${{ matrix.target }}
 
+      - name: Cache cargo registry
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+          key: ${{ runner.os }}-cargo-${{ matrix.target }}-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-${{ matrix.target }}-
+            ${{ runner.os }}-cargo-
+
       - name: Install cross-compilation dependencies (ARM)
         if: matrix.target == 'aarch64-unknown-linux-gnu'
         run: |
@@ -59,10 +70,9 @@ jobs:
           rustup target add aarch64-unknown-linux-gnu
 
       - name: Install maturin
-        uses: baptiste0928/cargo-install@v1
-        with:
-          crate: maturin
-          version: latest
+        run: |
+          # Use a specific version and add timeout to avoid cancellation
+          timeout 600 cargo install maturin --version 1.9.5 --locked --force
 
       - name: Update version from tag
         if: needs.check-tag.outputs.is_tagged == 'true'
@@ -139,11 +149,21 @@ jobs:
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
 
-      - name: Install maturin
-        uses: baptiste0928/cargo-install@v1
+      - name: Cache cargo registry
+        uses: actions/cache@v4
         with:
-          crate: maturin
-          version: latest
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+          key: ${{ runner.os }}-cargo-test-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-test-
+            ${{ runner.os }}-cargo-
+
+      - name: Install maturin
+        run: |
+          # Use a specific version and add timeout to avoid cancellation
+          timeout 600 cargo install maturin --version 1.9.5 --locked --force
 
       - name: Build in development mode
         run: maturin develop --release
