@@ -164,7 +164,7 @@ fn get_cheapest_periods(
 
 /// A Python module implemented in Rust.
 #[pymodule]
-fn spot_timer(m: &Bound<'_, PyModule>) -> PyResult<()> {
+fn spot_planner(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(get_cheapest_periods, m)?)?;
     Ok(())
 }

@@ -4,7 +4,7 @@ from typing import Sequence
 
 # Import the Rust implementation
 try:
-    from . import spot_timer as _rust_module
+    from . import spot_planner as _rust_module
 
     _RUST_AVAILABLE = True
 except ImportError:

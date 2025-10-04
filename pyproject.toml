@@ -1,5 +1,5 @@
 [project]
-name = "spot-timer"
+name = "spot-planner"
 version = "0.1.0"
 description = "Algorithm for finding the cheapest periods in a sequence of prices"
 readme = "README.md"

@@ -1,10 +1,10 @@
 [package]
-name = "spot-timer"
+name = "spot-planner"
 version = "0.1.0"
 edition = "2021"
 
 [lib]
-name = "spot_timer"
+name = "spot_planner"
 crate-type = ["cdylib"]
 
 [dependencies]

@@ -9,7 +9,7 @@ from decimal import Decimal
 
 import pytest
 
-from spot_timer.main import _get_cheapest_periods_python, get_cheapest_periods
+from spot_planner.main import _get_cheapest_periods_python, get_cheapest_periods
 
 
 class TestRustVsPython:

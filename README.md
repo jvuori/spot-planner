@@ -25,7 +25,7 @@ pip install -e .
 
 ```python
 from decimal import Decimal
-from spot_timer.main import get_cheapest_periods
+from spot_planner.main import get_cheapest_periods
 
 price_data = [Decimal("50"), Decimal("40"), Decimal("30"), Decimal("20")]
 result = get_cheapest_periods(

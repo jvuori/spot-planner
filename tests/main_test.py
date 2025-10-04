@@ -2,7 +2,7 @@ from decimal import Decimal
 
 import pytest
 
-from spot_timer.main import _is_valid_combination, get_cheapest_periods
+from spot_planner.main import _is_valid_combination, get_cheapest_periods
 
 PRICE_DATA = [
     Decimal("50"),  # 0
