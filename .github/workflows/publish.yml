@@ -98,15 +98,28 @@ jobs:
         if: needs.check-tag.outputs.is_tagged == 'true'
         run: |
           TAG_VERSION=${{ needs.check-tag.outputs.tag }}
+          echo "Original tag: $TAG_VERSION"
           # Remove 'v' prefix if present
           TAG_VERSION=${TAG_VERSION#v}
-          echo "Updating version to $TAG_VERSION"
+          echo "Cleaned version: $TAG_VERSION"
+
+          # Show current versions before update
+          echo "Current pyproject.toml version:"
+          grep "version = " pyproject.toml
+          echo "Current Cargo.toml version:"
+          grep "version = " Cargo.toml
 
           # Update pyproject.toml
           sed -i "s/^version = \".*\"/version = \"$TAG_VERSION\"/" pyproject.toml
 
           # Update Cargo.toml
           sed -i "s/^version = \".*\"/version = \"$TAG_VERSION\"/" Cargo.toml
+
+          # Show updated versions
+          echo "Updated pyproject.toml version:"
+          grep "version = " pyproject.toml
+          echo "Updated Cargo.toml version:"
+          grep "version = " Cargo.toml
 
           echo "Updated version to $TAG_VERSION"
 
@@ -172,6 +185,35 @@ jobs:
           path: dist
           pattern: wheel-*
           merge-multiple: true
+
+      - name: Update version from tag
+        if: needs.check-tag.outputs.is_tagged == 'true'
+        run: |
+          TAG_VERSION=${{ needs.check-tag.outputs.tag }}
+          echo "Original tag: $TAG_VERSION"
+          # Remove 'v' prefix if present
+          TAG_VERSION=${TAG_VERSION#v}
+          echo "Cleaned version: $TAG_VERSION"
+
+          # Show current versions before update
+          echo "Current pyproject.toml version:"
+          grep "version = " pyproject.toml
+          echo "Current Cargo.toml version:"
+          grep "version = " Cargo.toml
+
+          # Update pyproject.toml
+          sed -i "s/^version = \".*\"/version = \"$TAG_VERSION\"/" pyproject.toml
+
+          # Update Cargo.toml
+          sed -i "s/^version = \".*\"/version = \"$TAG_VERSION\"/" Cargo.toml
+
+          # Show updated versions
+          echo "Updated pyproject.toml version:"
+          grep "version = " pyproject.toml
+          echo "Updated Cargo.toml version:"
+          grep "version = " Cargo.toml
+
+          echo "Updated version to $TAG_VERSION"
 
       - name: Install uv
         uses: astral-sh/setup-uv@v3
