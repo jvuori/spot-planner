@@ -40,6 +40,7 @@ jobs:
     strategy:
       matrix:
         target: [x86_64-unknown-linux-gnu, aarch64-unknown-linux-gnu]
+        python-version: ["3.10", "3.11", "3.12", "3.13"]
         include:
           - target: x86_64-unknown-linux-gnu
             platform: linux-x86_64
@@ -128,12 +129,17 @@ jobs:
         with:
           version: "latest"
 
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
       - name: Build wheel
         env:
           TARGET: ${{ matrix.target }}
         run: |
           if [ "$TARGET" = "x86_64-unknown-linux-gnu" ]; then
-            maturin build --release --target $TARGET --out dist
+            maturin build --release --target $TARGET --out dist --compatibility manylinux
           else
             # For ARM64, we need to set the linker and use uv's Python
             export CC_aarch64_unknown_linux_gnu=aarch64-linux-gnu-gcc
@@ -142,7 +148,7 @@ jobs:
             export RANLIB_aarch64_unknown_linux_gnu=aarch64-linux-gnu-ranlib
             
             # Create a virtual environment with uv and activate it
-            uv venv --python 3.13
+            uv venv --python ${{ matrix.python-version }}
             source .venv/bin/activate
             
             # Get the Python interpreter path from the venv
@@ -151,7 +157,7 @@ jobs:
             python --version
             
             # Create a symlink with the expected name for maturin
-            sudo ln -sf "$PYTHON_PATH" /usr/local/bin/python3.13
+            sudo ln -sf "$PYTHON_PATH" /usr/local/bin/python${{ matrix.python-version }}
             
             # Set up cargo config for cross-compilation
             mkdir -p .cargo
@@ -160,13 +166,13 @@ jobs:
             echo 'ar = "aarch64-linux-gnu-ar"' >> .cargo/config.toml
             
             # Build with the interpreter name maturin expects for cross-compilation
-            maturin build --release --target $TARGET --out dist -i python3.13
+            maturin build --release --target $TARGET --out dist -i python${{ matrix.python-version }} --compatibility manylinux
           fi
 
       - name: Upload wheel artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: wheel-${{ matrix.platform }}
+          name: wheel-${{ matrix.platform }}-py${{ matrix.python-version }}
           path: dist/*.whl
 
   publish:
