@@ -39,7 +39,6 @@ build-backend = "maturin"
 
 [tool.maturin]
 python-source = "src"
-compatibility = "manylinux"
 module-name = "spot_planner"
 
 [dependency-groups]

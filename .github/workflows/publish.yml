@@ -139,7 +139,7 @@ jobs:
           TARGET: ${{ matrix.target }}
         run: |
           if [ "$TARGET" = "x86_64-unknown-linux-gnu" ]; then
-            maturin build --release --target $TARGET --out dist --compatibility manylinux
+            maturin build --release --target $TARGET --out dist
           else
             # For ARM64, we need to set the linker and use uv's Python
             export CC_aarch64_unknown_linux_gnu=aarch64-linux-gnu-gcc
@@ -166,7 +166,7 @@ jobs:
             echo 'ar = "aarch64-linux-gnu-ar"' >> .cargo/config.toml
             
             # Build with the interpreter name maturin expects for cross-compilation
-            maturin build --release --target $TARGET --out dist -i python${{ matrix.python-version }} --compatibility manylinux
+            maturin build --release --target $TARGET --out dist -i python${{ matrix.python-version }}
           fi
 
       - name: Upload wheel artifacts
