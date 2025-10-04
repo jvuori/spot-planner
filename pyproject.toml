@@ -6,8 +6,32 @@ readme = "README.md"
 authors = [
     { name = "Jaakko Vuori", email = "jaakko.vuori@gmail.com" }
 ]
-requires-python = ">=3.13"
+license = { text = "MIT" }
+requires-python = ">=3.10"
 dependencies = []
+keywords = ["spot-pricing", "optimization", "algorithm", "cost-analysis", "time-series"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Rust",
+    "Topic :: Scientific/Engineering :: Mathematics",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Typing :: Typed",
+]
+project-urls = {
+    "Homepage" = "https://github.com/jvuori/spot-planner",
+    "Bug Reports" = "https://github.com/jvuori/spot-planner/issues",
+    "Source" = "https://github.com/jvuori/spot-planner",
+    "Documentation" = "https://github.com/jvuori/spot-planner#readme",
+}
 
 [build-system]
 requires = ["maturin>=1.0,<2.0"]
@@ -15,6 +39,8 @@ build-backend = "maturin"
 
 [tool.maturin]
 python-source = "src"
+compatibility = "manylinux"
+module-name = "spot_planner"
 
 [dependency-groups]
 dev = [
