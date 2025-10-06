@@ -51,6 +51,9 @@ def test_whole_day_cheap_with_low_desired_count():
         max_gap=5,
         max_start_gap=5,
     )
+    assert (
+        len(periods) == 24
+    )  # Should return all 24 items since all are below threshold
     assert periods == list(range(24))
 
 

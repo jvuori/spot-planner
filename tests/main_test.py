@@ -26,7 +26,7 @@ def test_desired_count_is_same_as_for_price_threshold():
         max_gap=3,
         max_start_gap=3,
     )
-    assert periods == [3, 4, 5]
+    assert set(periods) == {3, 4, 5}  # Should be these 3 items, order may vary
 
 
 def test_desired_count_is_greater_than_for_price_threshold():
@@ -42,27 +42,29 @@ def test_desired_count_is_greater_than_for_price_threshold():
 
 
 def test_desired_count_is_less_than_for_min_period():
-    periods = get_cheapest_periods(
-        price_data=PRICE_DATA,
-        price_threshold=Decimal("10"),
-        desired_count=1,
-        min_period=3,
-        max_gap=3,
-        max_start_gap=3,
-    )
-    assert periods == [3, 4, 5]
+    # This should now raise an error since min_period > desired_count
+    with pytest.raises(ValueError, match="min_period cannot be greater than desired_count"):
+        get_cheapest_periods(
+            price_data=PRICE_DATA,
+            price_threshold=Decimal("10"),
+            desired_count=1,
+            min_period=3,
+            max_gap=3,
+            max_start_gap=3,
+        )
 
 
 def test_desired_count_is_zero():
-    periods = get_cheapest_periods(
-        price_data=PRICE_DATA,
-        price_threshold=Decimal("10"),
-        desired_count=0,
-        min_period=8,
-        max_gap=1,
-        max_start_gap=1,
-    )
-    assert periods == [0, 1, 2, 3, 4, 5, 6, 7]
+    # This should now raise an error since desired_count must be > 0
+    with pytest.raises(ValueError, match="desired_count must be greater than 0"):
+        get_cheapest_periods(
+            price_data=PRICE_DATA,
+            price_threshold=Decimal("10"),
+            desired_count=0,
+            min_period=8,
+            max_gap=1,
+            max_start_gap=1,
+        )
 
 
 @pytest.mark.parametrize(

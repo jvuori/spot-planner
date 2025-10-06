@@ -75,6 +75,37 @@ fn get_cheapest_periods(
     max_gap: usize,
     max_start_gap: usize,
 ) -> PyResult<Vec<usize>> {
+    // Validate input parameters
+    if price_data.is_empty() {
+        return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(
+            "price_data cannot be empty",
+        ));
+    }
+
+    if desired_count == 0 {
+        return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(
+            "desired_count must be greater than 0",
+        ));
+    }
+
+    if desired_count > price_data.len() {
+        return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(
+            "desired_count cannot be greater than total number of items",
+        ));
+    }
+
+    if min_period == 0 {
+        return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(
+            "min_period must be greater than 0",
+        ));
+    }
+
+    if min_period > desired_count {
+        return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(
+            "min_period cannot be greater than desired_count",
+        ));
+    }
+
     if max_start_gap > max_gap {
         return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(
             "max_start_gap must be less than or equal to max_gap",
@@ -104,15 +135,16 @@ fn get_cheapest_periods(
         .cloned()
         .collect();
 
+    // Start with desired_count as minimum, increment if no valid combination found
     let actual_count = std::cmp::max(desired_count, cheap_items.len());
-
-    // Special case: if all items are below threshold, return all of them
-    if cheap_items.len() == price_items.len() {
-        return Ok((0..price_items.len()).collect());
-    }
 
     // Special case: if desired_count equals total items, return all of them
     if desired_count == price_items.len() {
+        return Ok((0..price_items.len()).collect());
+    }
+
+    // Special case: if all items are below threshold, return all of them
+    if cheap_items.len() == price_items.len() {
         return Ok((0..price_items.len()).collect());
     }
 
