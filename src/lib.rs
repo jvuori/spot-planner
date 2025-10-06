@@ -106,6 +106,11 @@ fn get_cheapest_periods(
 
     let actual_count = std::cmp::max(desired_count, cheap_items.len());
 
+    // Special case: if all items are below threshold and we want all of them
+    if cheap_items.len() == price_items.len() && desired_count >= price_items.len() {
+        return Ok((0..price_items.len()).collect());
+    }
+
     let mut cheapest_price_item_combination: Vec<(usize, Decimal)> = Vec::new();
     let mut cheapest_cost = get_combination_cost(&price_items);
 
