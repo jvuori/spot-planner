@@ -111,6 +111,11 @@ fn get_cheapest_periods(
         return Ok((0..price_items.len()).collect());
     }
 
+    // Special case: if desired_count equals total items, return all of them
+    if desired_count == price_items.len() {
+        return Ok((0..price_items.len()).collect());
+    }
+
     let mut cheapest_price_item_combination: Vec<(usize, Decimal)> = Vec::new();
     let mut cheapest_cost = get_combination_cost(&price_items);
 

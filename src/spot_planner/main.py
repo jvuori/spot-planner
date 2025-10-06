@@ -83,6 +83,10 @@ def _get_cheapest_periods_python(
     if len(cheap_items) == len(price_items):
         return list(range(len(price_items)))
 
+    # Special case: if desired_count equals total items, return all of them
+    if desired_count == len(price_items):
+        return list(range(len(price_items)))
+
     cheapest_price_item_combination: tuple[tuple[int, Decimal], ...] = ()
     cheapest_cost: Decimal = _get_combination_cost(price_items)
 
