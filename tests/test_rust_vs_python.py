@@ -16,7 +16,7 @@ class TestRustVsPython:
     """Test suite comparing Rust and Python implementations."""
 
     @pytest.mark.parametrize(
-        "scenario_name,price_data,price_threshold,desired_count,min_period,max_gap,max_start_gap",
+        "scenario_name,prices,low_price_threshold,min_selections,min_consecutive_selections,max_gap_between_periods,max_gap_from_start",
         [
             pytest.param(*scenario, id=scenario[0])
             for scenario in [
@@ -192,7 +192,7 @@ class TestRustVsPython:
                     5,
                     5,
                 ),
-                # Real-world scenario: all prices below threshold with low desired_count
+                # Real-world scenario: all prices below threshold with low min_selections
                 (
                     "whole_day_cheap_low_desired",
                     [
@@ -227,7 +227,7 @@ class TestRustVsPython:
                     5,
                     5,
                 ),
-                # Real-world scenario: desired_count equals total items (all above threshold)
+                # Real-world scenario: min_selections equals total items (all above threshold)
                 (
                     "whole_day_desired",
                     [
@@ -268,31 +268,31 @@ class TestRustVsPython:
     def test_rust_vs_python_scenarios(
         self,
         scenario_name,
-        price_data,
-        price_threshold,
-        desired_count,
-        min_period,
-        max_gap,
-        max_start_gap,
+        prices,
+        low_price_threshold,
+        min_selections,
+        min_consecutive_selections,
+        max_gap_between_periods,
+        max_gap_from_start,
     ):
         """Test that Rust and Python implementations produce identical results for all scenarios."""
         try:
             # Get results from both implementations
             rust_result = get_cheapest_periods(
-                price_data,
-                price_threshold,
-                desired_count,
-                min_period,
-                max_gap,
-                max_start_gap,
+                prices,
+                low_price_threshold,
+                min_selections,
+                min_consecutive_selections,
+                max_gap_between_periods,
+                max_gap_from_start,
             )
             python_result = _get_cheapest_periods_python(
-                price_data,
-                price_threshold,
-                desired_count,
-                min_period,
-                max_gap,
-                max_start_gap,
+                prices,
+                low_price_threshold,
+                min_selections,
+                min_consecutive_selections,
+                max_gap_between_periods,
+                max_gap_from_start,
             )
 
             # Results should be identical
@@ -300,12 +300,12 @@ class TestRustVsPython:
                 f"Scenario '{scenario_name}' failed:\n"
                 f"Rust result: {rust_result}\n"
                 f"Python result: {python_result}\n"
-                f"Price data: {price_data}\n"
-                f"Threshold: {price_threshold}\n"
-                f"Desired count: {desired_count}\n"
-                f"Min period: {min_period}\n"
-                f"Max gap: {max_gap}\n"
-                f"Max start gap: {max_start_gap}"
+                f"Price data: {prices}\n"
+                f"Threshold: {low_price_threshold}\n"
+                f"Desired count: {min_selections}\n"
+                f"Min period: {min_consecutive_selections}\n"
+                f"Max gap: {max_gap_between_periods}\n"
+                f"Max start gap: {max_gap_from_start}"
             )
 
         except ValueError as e:
@@ -313,21 +313,23 @@ class TestRustVsPython:
             # But Python fallback might not have the same validation, so we need to check both
             try:
                 python_result = _get_cheapest_periods_python(
-                    price_data,
-                    price_threshold,
-                    desired_count,
-                    min_period,
-                    max_gap,
-                    max_start_gap,
+                    prices,
+                    low_price_threshold,
+                    min_selections,
+                    min_consecutive_selections,
+                    max_gap_between_periods,
+                    max_gap_from_start,
                 )
                 # If Python fallback succeeds, that's also valid
                 # The main function validation is more strict
             except ValueError as python_error:
                 # Both should raise ValueError, but error messages might differ
-                assert isinstance(e, ValueError) and isinstance(python_error, ValueError)
+                assert isinstance(e, ValueError) and isinstance(
+                    python_error, ValueError
+                )
 
     @pytest.mark.parametrize(
-        "desired_count,min_period,max_gap,max_start_gap",
+        "min_selections,min_consecutive_selections,max_gap_between_periods,max_gap_from_start",
         [
             (0, 1, 1, 1),
             (1, 1, 1, 1),
@@ -354,11 +356,15 @@ class TestRustVsPython:
         ],
     )
     def test_rust_vs_python_parameter_combinations(
-        self, desired_count, min_period, max_gap, max_start_gap
+        self,
+        min_selections,
+        min_consecutive_selections,
+        max_gap_between_periods,
+        max_gap_from_start,
     ):
         """Test various parameter combinations to ensure consistency."""
         # Use a fixed price dataset for parameter testing
-        price_data = [
+        prices = [
             Decimal("50"),
             Decimal("40"),
             Decimal("30"),
@@ -380,25 +386,25 @@ class TestRustVsPython:
             Decimal("48"),
             Decimal("58"),
         ]
-        price_threshold = Decimal("30")
+        low_price_threshold = Decimal("30")
 
         try:
             # Get results from both implementations
             rust_result = get_cheapest_periods(
-                price_data,
-                price_threshold,
-                desired_count,
-                min_period,
-                max_gap,
-                max_start_gap,
+                prices,
+                low_price_threshold,
+                min_selections,
+                min_consecutive_selections,
+                max_gap_between_periods,
+                max_gap_from_start,
             )
             python_result = _get_cheapest_periods_python(
-                price_data,
-                price_threshold,
-                desired_count,
-                min_period,
-                max_gap,
-                max_start_gap,
+                prices,
+                low_price_threshold,
+                min_selections,
+                min_consecutive_selections,
+                max_gap_between_periods,
+                max_gap_from_start,
             )
 
             # Results should be identical
@@ -406,10 +412,10 @@ class TestRustVsPython:
                 f"Parameter combination failed:\n"
                 f"Rust result: {rust_result}\n"
                 f"Python result: {python_result}\n"
-                f"Desired count: {desired_count}\n"
-                f"Min period: {min_period}\n"
-                f"Max gap: {max_gap}\n"
-                f"Max start gap: {max_start_gap}"
+                f"Desired count: {min_selections}\n"
+                f"Min period: {min_consecutive_selections}\n"
+                f"Max gap: {max_gap_between_periods}\n"
+                f"Max start gap: {max_gap_from_start}"
             )
 
         except ValueError as e:
@@ -417,21 +423,23 @@ class TestRustVsPython:
             # But Python fallback might not have the same validation, so we need to check both
             try:
                 python_result = _get_cheapest_periods_python(
-                    price_data,
-                    price_threshold,
-                    desired_count,
-                    min_period,
-                    max_gap,
-                    max_start_gap,
+                    prices,
+                    low_price_threshold,
+                    min_selections,
+                    min_consecutive_selections,
+                    max_gap_between_periods,
+                    max_gap_from_start,
                 )
                 # If Python fallback succeeds, that's also valid
                 # The main function validation is more strict
             except ValueError as python_error:
                 # Both should raise ValueError, but error messages might differ
-                assert isinstance(e, ValueError) and isinstance(python_error, ValueError)
+                assert isinstance(e, ValueError) and isinstance(
+                    python_error, ValueError
+                )
 
     @pytest.mark.parametrize(
-        "price_data,price_threshold,desired_count,min_period,max_gap,max_start_gap",
+        "prices,low_price_threshold,min_selections,min_consecutive_selections,max_gap_between_periods,max_gap_from_start",
         [
             # Empty price data
             ([], Decimal("10"), 1, 1, 1, 1),
@@ -449,42 +457,42 @@ class TestRustVsPython:
     )
     def test_rust_vs_python_edge_cases(
         self,
-        price_data,
-        price_threshold,
-        desired_count,
-        min_period,
-        max_gap,
-        max_start_gap,
+        prices,
+        low_price_threshold,
+        min_selections,
+        min_consecutive_selections,
+        max_gap_between_periods,
+        max_gap_from_start,
     ):
         """Test specific edge cases that might cause issues."""
         try:
             rust_result = get_cheapest_periods(
-                price_data,
-                price_threshold,
-                desired_count,
-                min_period,
-                max_gap,
-                max_start_gap,
+                prices,
+                low_price_threshold,
+                min_selections,
+                min_consecutive_selections,
+                max_gap_between_periods,
+                max_gap_from_start,
             )
             python_result = _get_cheapest_periods_python(
-                price_data,
-                price_threshold,
-                desired_count,
-                min_period,
-                max_gap,
-                max_start_gap,
+                prices,
+                low_price_threshold,
+                min_selections,
+                min_consecutive_selections,
+                max_gap_between_periods,
+                max_gap_from_start,
             )
 
             assert rust_result == python_result, (
                 f"Edge case failed:\n"
                 f"Rust result: {rust_result}\n"
                 f"Python result: {python_result}\n"
-                f"Price data: {price_data}\n"
-                f"Threshold: {price_threshold}\n"
-                f"Desired count: {desired_count}\n"
-                f"Min period: {min_period}\n"
-                f"Max gap: {max_gap}\n"
-                f"Max start gap: {max_start_gap}"
+                f"Price data: {prices}\n"
+                f"Threshold: {low_price_threshold}\n"
+                f"Desired count: {min_selections}\n"
+                f"Min period: {min_consecutive_selections}\n"
+                f"Max gap: {max_gap_between_periods}\n"
+                f"Max start gap: {max_gap_from_start}"
             )
 
         except ValueError as e:
@@ -492,18 +500,20 @@ class TestRustVsPython:
             # But Python fallback might not have the same validation, so we need to check both
             try:
                 python_result = _get_cheapest_periods_python(
-                    price_data,
-                    price_threshold,
-                    desired_count,
-                    min_period,
-                    max_gap,
-                    max_start_gap,
+                    prices,
+                    low_price_threshold,
+                    min_selections,
+                    min_consecutive_selections,
+                    max_gap_between_periods,
+                    max_gap_from_start,
                 )
                 # If Python fallback succeeds, that's also valid
                 # The main function validation is more strict
             except ValueError as python_error:
                 # Both should raise ValueError, but error messages might differ
-                assert isinstance(e, ValueError) and isinstance(python_error, ValueError)
+                assert isinstance(e, ValueError) and isinstance(
+                    python_error, ValueError
+                )
 
     def test_rust_vs_python_random_scenarios(self):
         """Test with randomly generated scenarios to catch edge cases."""
@@ -514,59 +524,63 @@ class TestRustVsPython:
 
         for i in range(10):  # Test 10 random scenarios (reduced for speed)
             # Generate random price data (20 prices)
-            price_data = [Decimal(str(random.uniform(1, 100))) for _ in range(20)]
+            prices = [Decimal(str(random.uniform(1, 100))) for _ in range(20)]
 
             # Generate random parameters (ensure valid combinations)
-            price_threshold = Decimal(str(random.uniform(10, 80)))
-            desired_count = random.randint(1, 10)  # Must be > 0
-            min_period = random.randint(1, min(5, desired_count))  # Must be <= desired_count
-            max_gap = random.randint(1, 5)
-            max_start_gap = random.randint(1, max_gap)  # Must be <= max_gap
+            low_price_threshold = Decimal(str(random.uniform(10, 80)))
+            min_selections = random.randint(1, 10)  # Must be > 0
+            min_consecutive_selections = random.randint(
+                1, min(5, min_selections)
+            )  # Must be <= min_selections
+            max_gap_between_periods = random.randint(1, 5)
+            max_gap_from_start = random.randint(
+                1, max_gap_between_periods
+            )  # Must be <= max_gap_between_periods
 
             try:
                 rust_result = get_cheapest_periods(
-                    price_data,
-                    price_threshold,
-                    desired_count,
-                    min_period,
-                    max_gap,
-                    max_start_gap,
+                    prices,
+                    low_price_threshold,
+                    min_selections,
+                    min_consecutive_selections,
+                    max_gap_between_periods,
+                    max_gap_from_start,
                 )
                 python_result = _get_cheapest_periods_python(
-                    price_data,
-                    price_threshold,
-                    desired_count,
-                    min_period,
-                    max_gap,
-                    max_start_gap,
+                    prices,
+                    low_price_threshold,
+                    min_selections,
+                    min_consecutive_selections,
+                    max_gap_between_periods,
+                    max_gap_from_start,
                 )
 
                 assert rust_result == python_result, (
                     f"Random scenario {i} failed:\n"
                     f"Rust result: {rust_result}\n"
                     f"Python result: {python_result}\n"
-                    f"Price data: {price_data}\n"
-                    f"Threshold: {price_threshold}\n"
-                    f"Desired count: {desired_count}\n"
-                    f"Min period: {min_period}\n"
-                    f"Max gap: {max_gap}\n"
-                    f"Max start gap: {max_start_gap}"
+                    f"Price data: {prices}\n"
+                    f"Threshold: {low_price_threshold}\n"
+                    f"Desired count: {min_selections}\n"
+                    f"Min period: {min_consecutive_selections}\n"
+                    f"Max gap: {max_gap_between_periods}\n"
+                    f"Max start gap: {max_gap_from_start}"
                 )
 
             except ValueError as e:
                 # Both implementations should raise the same error
                 with pytest.raises(ValueError, match=str(e)):
                     _get_cheapest_periods_python(
-                        price_data,
-                        price_threshold,
-                        desired_count,
-                        min_period,
-                        max_gap,
-                        max_start_gap,
+                        prices,
+                        low_price_threshold,
+                        min_selections,
+                        min_consecutive_selections,
+                        max_gap_between_periods,
+                        max_gap_from_start,
                     )
 
     @pytest.mark.parametrize(
-        "price_threshold,desired_count,min_period,max_gap,max_start_gap",
+        "low_price_threshold,min_selections,min_consecutive_selections,max_gap_between_periods,max_gap_from_start",
         [
             (Decimal("10"), 12, 1, 1, 1),
             (Decimal("5"), 15, 2, 1, 1),
@@ -575,7 +589,12 @@ class TestRustVsPython:
         ],
     )
     def test_rust_vs_python_performance_consistency(
-        self, price_threshold, desired_count, min_period, max_gap, max_start_gap
+        self,
+        low_price_threshold,
+        min_selections,
+        min_consecutive_selections,
+        max_gap_between_periods,
+        max_gap_from_start,
     ):
         """Test that both implementations handle the same performance scenarios consistently."""
         # Use the same data as the original performance test but with more variations
@@ -583,27 +602,27 @@ class TestRustVsPython:
 
         rust_result = get_cheapest_periods(
             base_prices,
-            price_threshold,
-            desired_count,
-            min_period,
-            max_gap,
-            max_start_gap,
+            low_price_threshold,
+            min_selections,
+            min_consecutive_selections,
+            max_gap_between_periods,
+            max_gap_from_start,
         )
         python_result = _get_cheapest_periods_python(
             base_prices,
-            price_threshold,
-            desired_count,
-            min_period,
-            max_gap,
-            max_start_gap,
+            low_price_threshold,
+            min_selections,
+            min_consecutive_selections,
+            max_gap_between_periods,
+            max_gap_from_start,
         )
 
         assert rust_result == python_result, (
             f"Performance test failed:\n"
             f"Rust result: {rust_result}\n"
             f"Python result: {python_result}\n"
-            f"Parameters: threshold={price_threshold}, count={desired_count}, "
-            f"min_period={min_period}, max_gap={max_gap}, max_start_gap={max_start_gap}"
+            f"Parameters: threshold={low_price_threshold}, count={min_selections}, "
+            f"min_consecutive_selections={min_consecutive_selections}, max_gap_between_periods={max_gap_between_periods}, max_gap_from_start={max_gap_from_start}"
         )
 
     def test_rust_vs_python_decimal_precision(self):
@@ -617,13 +636,13 @@ class TestRustVsPython:
             Decimal("30.999999999"),
         ]
 
-        price_threshold = Decimal("20.5")
+        low_price_threshold = Decimal("20.5")
 
         rust_result = get_cheapest_periods(
-            high_precision_prices, price_threshold, 2, 1, 1, 1
+            high_precision_prices, low_price_threshold, 2, 1, 1, 1
         )
         python_result = _get_cheapest_periods_python(
-            high_precision_prices, price_threshold, 2, 1, 1, 1
+            high_precision_prices, low_price_threshold, 2, 1, 1, 1
         )
 
         assert rust_result == python_result, (

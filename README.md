@@ -35,7 +35,7 @@ from decimal import Decimal
 from spot_planner import get_cheapest_periods
 
 # Example: Find cheapest electricity periods
-price_data = [
+prices = [
     Decimal("50"),  # 6 AM - expensive
     Decimal("40"),  # 7 AM - moderate
     Decimal("30"),  # 8 AM - cheap
@@ -45,12 +45,12 @@ price_data = [
 
 # Find 2 cheapest periods with price under 35
 result = get_cheapest_periods(
-    price_data=price_data,
-    price_threshold=Decimal("35"),
-    desired_count=2,
-    min_period=1,
-    max_gap=1,
-    max_start_gap=1
+    prices=prices,
+    low_price_threshold=Decimal("35"),
+    min_selections=2,
+    min_consecutive_selections=1,
+    max_gap_between_periods_between_periods=1,
+    max_gap_between_periods_from_start=1
 )
 
 print(result)  # [2, 3] - periods starting at index 2 and 3
@@ -63,11 +63,11 @@ print(result)  # [2, 3] - periods starting at index 2 and 3
 ```python
 # Find cheapest 3-hour periods for running high-power equipment
 cheap_periods = get_cheapest_periods(
-    price_data=hourly_prices,
-    price_threshold=Decimal("0.05"),  # 5 cents per kWh
-    desired_count=3,
-    min_period=3,  # 3-hour minimum
-    max_gap=2      # Allow 2-hour gaps between periods
+    prices=hourly_prices,
+    low_price_threshold=Decimal("0.05"),  # 5 cents per kWh
+    min_selections=3,
+    min_consecutive_selections=3,  # 3-hour minimum
+    max_gap_between_periods=2      # Allow 2-hour gaps between periods
 )
 ```
 
@@ -76,11 +76,11 @@ cheap_periods = get_cheapest_periods(
 ```python
 # Find most cost-effective periods for batch processing
 optimal_windows = get_cheapest_periods(
-    price_data=aws_spot_prices,
-    price_threshold=Decimal("0.10"),  # $0.10 per hour
-    desired_count=5,
-    min_period=4,  # 4-hour processing windows
-    max_gap=1      # Minimal gaps between windows
+    prices=aws_spot_prices,
+    low_price_threshold=Decimal("0.10"),  # $0.10 per hour
+    min_selections=5,
+    min_consecutive_selections=4,  # 4-hour processing windows
+    max_gap_between_periods=1      # Minimal gaps between windows
 )
 ```
 
@@ -89,28 +89,28 @@ optimal_windows = get_cheapest_periods(
 ```python
 # Plan maintenance windows during low-cost periods
 maintenance_slots = get_cheapest_periods(
-    price_data=resource_costs,
-    price_threshold=budget_threshold,
-    desired_count=2,
-    min_period=8,  # 8-hour maintenance windows
-    max_gap=0      # No gaps allowed
+    prices=resource_costs,
+    low_price_threshold=budget_threshold,
+    min_selections=2,
+    min_consecutive_selections=8,  # 8-hour maintenance windows
+    max_gap_between_periods=0      # No gaps allowed
 )
 ```
 
 ## API Reference
 
-### `get_cheapest_periods(price_data, price_threshold, desired_count, min_period=1, max_gap=0, max_start_gap=0)`
+### `get_cheapest_periods(prices, low_price_threshold, min_selections, min_consecutive_selections=1, max_gap_between_periods=0, max_gap_from_start=0)`
 
 Find the cheapest periods in a price sequence.
 
 **Parameters:**
 
-- `price_data` (List[Decimal]): Sequence of prices to analyze
-- `price_threshold` (Decimal): Maximum price for valid periods
-- `desired_count` (int): Number of periods to find
-- `min_period` (int, optional): Minimum period length. Defaults to 1.
-- `max_gap` (int, optional): Maximum gap between periods. Defaults to 0.
-- `max_start_gap` (int, optional): Maximum gap from start to first period. Defaults to 0.
+- `prices` (List[Decimal]): Sequence of prices to analyze
+- `low_price_threshold` (Decimal): Maximum price for valid periods
+- `min_selections` (int): Number of periods to find
+- `min_consecutive_selections` (int, optional): Minimum period length. Defaults to 1.
+- `max_gap_between_periods` (int, optional): Maximum gap between periods. Defaults to 0.
+- `max_gap_from_start` (int, optional): Maximum gap from start to first period. Defaults to 0.
 
 **Returns:**
 

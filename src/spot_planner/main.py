@@ -13,9 +13,9 @@ except ImportError:
 
 def _is_valid_combination(
     combination: tuple[tuple[int, Decimal], ...],
-    min_period: int,
-    max_gap: int,
-    max_start_gap: int,
+    min_consecutive_selections: int,
+    max_gap_between_periods: int,
+    max_gap_from_start: int,
     full_length: int,
 ) -> bool:
     if not combination:
@@ -24,34 +24,34 @@ def _is_valid_combination(
     # Items are already sorted, so indices are in order
     indices = [index for index, _ in combination]
 
-    # Check max_start_gap first (fastest check)
-    if indices[0] > max_start_gap:
+    # Check max_gap_from_start first (fastest check)
+    if indices[0] > max_gap_from_start:
         return False
 
     # Check start gap
-    if indices[0] > max_gap:
+    if indices[0] > max_gap_between_periods:
         return False
 
-    # Check gaps between consecutive indices and min_period in single pass
+    # Check gaps between consecutive indices and min_consecutive_selections in single pass
     block_length = 1
     for i in range(1, len(indices)):
         gap = indices[i] - indices[i - 1] - 1
-        if gap > max_gap:
+        if gap > max_gap_between_periods:
             return False
 
         if indices[i] == indices[i - 1] + 1:
             block_length += 1
         else:
-            if block_length < min_period:
+            if block_length < min_consecutive_selections:
                 return False
             block_length = 1
 
-    # Check last block min_period
-    if block_length < min_period:
+    # Check last block min_consecutive_selections
+    if block_length < min_consecutive_selections:
         return False
 
     # Check end gap
-    if (full_length - 1 - indices[-1]) > max_gap:
+    if (full_length - 1 - indices[-1]) > max_gap_between_periods:
         return False
 
     return True
@@ -62,22 +62,22 @@ def _get_combination_cost(combination: tuple[tuple[int, Decimal], ...]) -> Decim
 
 
 def _get_cheapest_periods_python(
-    price_data: Sequence[Decimal],
-    price_threshold: Decimal,
-    desired_count: int,
-    min_period: int,
-    max_gap: int,
-    max_start_gap: int,
+    prices: Sequence[Decimal],
+    low_price_threshold: Decimal,
+    min_selections: int,
+    min_consecutive_selections: int,
+    max_gap_between_periods: int,
+    max_gap_from_start: int,
 ) -> list[int]:
-    price_items: tuple[tuple[int, Decimal], ...] = tuple(enumerate(price_data))
+    price_items: tuple[tuple[int, Decimal], ...] = tuple(enumerate(prices))
     cheap_items: tuple[tuple[int, Decimal], ...] = tuple(
-        (index, price) for index, price in price_items if price <= price_threshold
+        (index, price) for index, price in price_items if price <= low_price_threshold
     )
-    # Start with desired_count as minimum, increment if no valid combination found
-    actual_count = max(desired_count, len(cheap_items))
+    # Start with min_selections as minimum, increment if no valid combination found
+    actual_count = max(min_selections, len(cheap_items))
 
-    # Special case: if desired_count equals total items, return all of them
-    if desired_count == len(price_items):
+    # Special case: if min_selections equals total items, return all of them
+    if min_selections == len(price_items):
         return list(range(len(price_items)))
 
     # Special case: if all items are below threshold, return all of them
@@ -97,9 +97,9 @@ def _get_cheapest_periods_python(
         ):
             if not _is_valid_combination(
                 price_item_combination,
-                min_period,
-                max_gap,
-                max_start_gap,
+                min_consecutive_selections,
+                max_gap_between_periods,
+                max_gap_from_start,
                 len(price_items),
             ):
                 continue
@@ -128,63 +128,104 @@ def _get_cheapest_periods_python(
 
 
 def get_cheapest_periods(
-    price_data: Sequence[Decimal],
-    price_threshold: Decimal,
-    desired_count: int,
-    min_period: int,
-    max_gap: int,
-    max_start_gap: int,
+    prices: Sequence[Decimal],
+    low_price_threshold: Decimal,
+    min_selections: int,
+    min_consecutive_selections: int,
+    max_gap_between_periods: int,
+    max_gap_from_start: int,
 ) -> list[int]:
     """
-    Find the cheapest periods in a sequence of prices.
+    Find optimal periods in a price sequence based on cost and timing constraints.
 
-    This function uses a Rust implementation for better performance,
-    with a Python fallback if the Rust module is not available.
+    This algorithm selects periods (indices) from a price sequence to minimize cost
+    while satisfying various timing constraints. The primary selection criterion is
+    the price threshold - all periods with prices at or below the threshold are
+    automatically selected regardless of other constraints.
+
+    Args:
+        prices: Sequence of prices for each period. Each element represents the
+               price for one time period (e.g., hourly, 15-minute intervals).
+        low_price_threshold: Price threshold below/equal to which periods are
+                           automatically selected. All periods with price <= threshold
+                           will be included in the result regardless of other constraints.
+        min_selections: Minimum number of individual periods (indices) that must be
+                       selected. The algorithm will select at least this many periods,
+                       but may select more if they are below the price threshold.
+        min_consecutive_selections: Minimum number of consecutive periods that must be
+                                  selected together. Any selected period must be part of
+                                  a run of at least this many consecutive selections.
+                                  Prevents isolated single-period selections.
+        max_gap_between_periods: Maximum number of periods allowed between selected
+                               periods. Controls the maximum downtime between operating
+                               periods. Set to 0 to require consecutive selections only.
+        max_gap_from_start: Maximum number of periods from the beginning before the
+                          first selection must occur. Controls how long we can wait
+                          before starting operations.
+
+    Returns:
+        List of indices representing the selected periods, sorted by price (cheapest first).
+        The indices correspond to positions in the input prices sequence.
+
+    Raises:
+        ValueError: If the input parameters are invalid or no valid combination
+                   can be found that satisfies all constraints.
+
+    Examples:
+        >>> prices = [Decimal('0.05'), Decimal('0.08'), Decimal('0.12'), Decimal('0.06')]
+        >>> get_cheapest_periods(prices, Decimal('0.10'), 2, 1, 1, 1)
+        [0, 3, 1]  # Selects periods 0, 1, 3 (all <= 0.10, sorted by price)
+
+    Note:
+        The algorithm prioritizes periods below the price threshold. If all periods
+        are below the threshold, all periods will be selected regardless of other
+        constraints. If the desired number of periods equals the total number of
+        periods, all periods will be selected regardless of price.
     """
     # Validate input parameters before calling either implementation
-    if not price_data:
-        raise ValueError("price_data cannot be empty")
+    if not prices:
+        raise ValueError("prices cannot be empty")
 
-    if desired_count <= 0:
-        raise ValueError("desired_count must be greater than 0")
+    if min_selections <= 0:
+        raise ValueError("min_selections must be greater than 0")
 
-    if desired_count > len(price_data):
-        raise ValueError("desired_count cannot be greater than total number of items")
+    if min_selections > len(prices):
+        raise ValueError("min_selections cannot be greater than total number of items")
 
-    if min_period <= 0:
-        raise ValueError("min_period must be greater than 0")
+    if min_consecutive_selections <= 0:
+        raise ValueError("min_consecutive_selections must be greater than 0")
 
-    if min_period > desired_count:
-        raise ValueError("min_period cannot be greater than desired_count")
+    if min_consecutive_selections > min_selections:
+        raise ValueError("min_consecutive_selections cannot be greater than min_selections")
 
-    if max_gap < 0:
-        raise ValueError("max_gap must be greater than or equal to 0")
+    if max_gap_between_periods < 0:
+        raise ValueError("max_gap_between_periods must be greater than or equal to 0")
 
-    if max_start_gap < 0:
-        raise ValueError("max_start_gap must be greater than or equal to 0")
+    if max_gap_from_start < 0:
+        raise ValueError("max_gap_from_start must be greater than or equal to 0")
 
-    if max_start_gap > max_gap:
-        raise ValueError("max_start_gap must be less than or equal to max_gap")
+    if max_gap_from_start > max_gap_between_periods:
+        raise ValueError("max_gap_from_start must be less than or equal to max_gap_between_periods")
 
     if _RUST_AVAILABLE:
         # Use Rust implementation - convert Decimal objects to strings
-        price_data_str = [str(price) for price in price_data]
-        price_threshold_str = str(price_threshold)
+        prices_str = [str(price) for price in prices]
+        low_price_threshold_str = str(low_price_threshold)
         return _rust_module.get_cheapest_periods(
-            price_data_str,
-            price_threshold_str,
-            desired_count,
-            min_period,
-            max_gap,
-            max_start_gap,
+            prices_str,
+            low_price_threshold_str,
+            min_selections,
+            min_consecutive_selections,
+            max_gap_between_periods,
+            max_gap_from_start,
         )
     else:
         # Fallback to Python implementation
         return _get_cheapest_periods_python(
-            price_data,
-            price_threshold,
-            desired_count,
-            min_period,
-            max_gap,
-            max_start_gap,
+            prices,
+            low_price_threshold,
+            min_selections,
+            min_consecutive_selections,
+            max_gap_between_periods,
+            max_gap_from_start,
         )

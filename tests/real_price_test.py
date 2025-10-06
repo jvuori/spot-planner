@@ -32,24 +32,24 @@ ALL_CHEAP_PRICES = [
 
 def test_whole_day_cheap():
     periods = get_cheapest_periods(
-        price_data=ALL_CHEAP_PRICES,
-        price_threshold=Decimal("0.7973127490039840637554282614"),
-        desired_count=24,
-        min_period=1,
-        max_gap=5,
-        max_start_gap=5,
+        prices=ALL_CHEAP_PRICES,
+        low_price_threshold=Decimal("0.7973127490039840637554282614"),
+        min_selections=24,
+        min_consecutive_selections=1,
+        max_gap_between_periods=5,
+        max_gap_from_start=5,
     )
     assert periods == list(range(24))
 
 
-def test_whole_day_cheap_with_low_desired_count():
+def test_whole_day_cheap_with_low_min_selections():
     periods = get_cheapest_periods(
-        price_data=ALL_CHEAP_PRICES,
-        price_threshold=Decimal("0.7973127490039840637554282614"),
-        desired_count=2,
-        min_period=1,
-        max_gap=5,
-        max_start_gap=5,
+        prices=ALL_CHEAP_PRICES,
+        low_price_threshold=Decimal("0.7973127490039840637554282614"),
+        min_selections=2,
+        min_consecutive_selections=1,
+        max_gap_between_periods=5,
+        max_gap_from_start=5,
     )
     assert (
         len(periods) == 24
@@ -59,11 +59,11 @@ def test_whole_day_cheap_with_low_desired_count():
 
 def test_whole_day_desired():
     periods = get_cheapest_periods(
-        price_data=ALL_CHEAP_PRICES,
-        price_threshold=Decimal("-1.0"),
-        desired_count=24,
-        min_period=1,
-        max_gap=5,
-        max_start_gap=5,
+        prices=ALL_CHEAP_PRICES,
+        low_price_threshold=Decimal("-1.0"),
+        min_selections=24,
+        min_consecutive_selections=1,
+        max_gap_between_periods=5,
+        max_gap_from_start=5,
     )
     assert periods == list(range(24))

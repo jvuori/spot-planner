@@ -6,9 +6,9 @@ use std::collections::HashSet;
 /// Check if a combination of price items is valid according to the constraints
 fn is_valid_combination(
     combination: &[(usize, Decimal)],
-    min_period: usize,
-    max_gap: usize,
-    max_start_gap: usize,
+    min_consecutive_selections: usize,
+    max_gap_between_periods: usize,
+    max_gap_from_start: usize,
     full_length: usize,
 ) -> bool {
     if combination.is_empty() {
@@ -18,41 +18,41 @@ fn is_valid_combination(
     // Items are already sorted, so indices are in order
     let indices: Vec<usize> = combination.iter().map(|(index, _)| *index).collect();
 
-    // Check max_start_gap first (fastest check)
-    if indices[0] > max_start_gap {
+    // Check max_gap_from_start first (fastest check)
+    if indices[0] > max_gap_from_start {
         return false;
     }
 
     // Check start gap
-    if indices[0] > max_gap {
+    if indices[0] > max_gap_between_periods {
         return false;
     }
 
-    // Check gaps between consecutive indices and min_period in single pass
+    // Check gaps between consecutive indices and min_consecutive_selections in single pass
     let mut block_length = 1;
     for i in 1..indices.len() {
         let gap = indices[i] - indices[i - 1] - 1;
-        if gap > max_gap {
+        if gap > max_gap_between_periods {
             return false;
         }
 
         if indices[i] == indices[i - 1] + 1 {
             block_length += 1;
         } else {
-            if block_length < min_period {
+            if block_length < min_consecutive_selections {
                 return false;
             }
             block_length = 1;
         }
     }
 
-    // Check last block min_period
-    if block_length < min_period {
+    // Check last block min_consecutive_selections
+    if block_length < min_consecutive_selections {
         return false;
     }
 
     // Check end gap
-    if (full_length - 1 - indices[indices.len() - 1]) > max_gap {
+    if (full_length - 1 - indices[indices.len() - 1]) > max_gap_between_periods {
         return false;
     }
 
@@ -68,52 +68,52 @@ fn get_combination_cost(combination: &[(usize, Decimal)]) -> Decimal {
 #[pyfunction]
 fn get_cheapest_periods(
     _py: Python,
-    price_data: &Bound<'_, PyList>,
-    price_threshold: &str,
-    desired_count: usize,
-    min_period: usize,
-    max_gap: usize,
-    max_start_gap: usize,
+    prices: &Bound<'_, PyList>,
+    low_price_threshold: &str,
+    min_selections: usize,
+    min_consecutive_selections: usize,
+    max_gap_between_periods: usize,
+    max_gap_from_start: usize,
 ) -> PyResult<Vec<usize>> {
     // Validate input parameters
-    if price_data.is_empty() {
+    if prices.is_empty() {
         return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(
-            "price_data cannot be empty",
+            "prices cannot be empty",
         ));
     }
 
-    if desired_count == 0 {
+    if min_selections == 0 {
         return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(
-            "desired_count must be greater than 0",
+            "min_selections must be greater than 0",
         ));
     }
 
-    if desired_count > price_data.len() {
+    if min_selections > prices.len() {
         return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(
-            "desired_count cannot be greater than total number of items",
+            "min_selections cannot be greater than total number of items",
         ));
     }
 
-    if min_period == 0 {
+    if min_consecutive_selections == 0 {
         return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(
-            "min_period must be greater than 0",
+            "min_consecutive_selections must be greater than 0",
         ));
     }
 
-    if min_period > desired_count {
+    if min_consecutive_selections > min_selections {
         return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(
-            "min_period cannot be greater than desired_count",
+            "min_consecutive_selections cannot be greater than min_selections",
         ));
     }
 
-    if max_start_gap > max_gap {
+    if max_gap_from_start > max_gap_between_periods {
         return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(
-            "max_start_gap must be less than or equal to max_gap",
+            "max_gap_from_start must be less than or equal to max_gap_between_periods",
         ));
     }
 
     // Convert Python list to Vec<Decimal>
-    let price_data: Vec<Decimal> = price_data
+    let prices: Vec<Decimal> = prices
         .iter()
         .map(|item| {
             let decimal_str = item.extract::<String>()?;
@@ -123,23 +123,23 @@ fn get_cheapest_periods(
         })
         .collect::<PyResult<Vec<Decimal>>>()?;
 
-    let price_threshold: Decimal = price_threshold
+    let low_price_threshold: Decimal = low_price_threshold
         .parse::<Decimal>()
         .map_err(|_| PyErr::new::<pyo3::exceptions::PyValueError, _>("Invalid decimal"))?;
 
-    let price_items: Vec<(usize, Decimal)> = price_data.into_iter().enumerate().collect();
+    let price_items: Vec<(usize, Decimal)> = prices.into_iter().enumerate().collect();
 
     let cheap_items: Vec<(usize, Decimal)> = price_items
         .iter()
-        .filter(|(_, price)| *price <= price_threshold)
+        .filter(|(_, price)| *price <= low_price_threshold)
         .cloned()
         .collect();
 
-    // Start with desired_count as minimum, increment if no valid combination found
-    let actual_count = std::cmp::max(desired_count, cheap_items.len());
+    // Start with min_selections as minimum, increment if no valid combination found
+    let actual_count = std::cmp::max(min_selections, cheap_items.len());
 
-    // Special case: if desired_count equals total items, return all of them
-    if desired_count == price_items.len() {
+    // Special case: if min_selections equals total items, return all of them
+    if min_selections == price_items.len() {
         return Ok((0..price_items.len()).collect());
     }
 
@@ -161,9 +161,9 @@ fn get_cheapest_periods(
         {
             if !is_valid_combination(
                 &combination,
-                min_period,
-                max_gap,
-                max_start_gap,
+                min_consecutive_selections,
+                max_gap_between_periods,
+                max_gap_from_start,
                 price_items.len(),
             ) {
                 continue;
