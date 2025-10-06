@@ -106,8 +106,8 @@ fn get_cheapest_periods(
 
     let actual_count = std::cmp::max(desired_count, cheap_items.len());
 
-    // Special case: if all items are below threshold and we want all of them
-    if cheap_items.len() == price_items.len() && desired_count >= price_items.len() {
+    // Special case: if all items are below threshold, return all of them
+    if cheap_items.len() == price_items.len() {
         return Ok((0..price_items.len()).collect());
     }
 

@@ -79,8 +79,8 @@ def _get_cheapest_periods_python(
     )
     actual_count = max(desired_count, len(cheap_items))
 
-    # Special case: if all items are below threshold and we want all of them
-    if len(cheap_items) == len(price_items) and desired_count >= len(price_items):
+    # Special case: if all items are below threshold, return all of them
+    if len(cheap_items) == len(price_items):
         return list(range(len(price_items)))
 
     cheapest_price_item_combination: tuple[tuple[int, Decimal], ...] = ()
