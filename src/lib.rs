@@ -64,6 +64,38 @@ fn get_combination_cost(combination: &[(usize, Decimal)]) -> Decimal {
     combination.iter().map(|(_, price)| *price).sum()
 }
 
+/// Check if all consecutive runs in indices meet the minimum length requirement
+fn check_consecutive_runs(indices: &[usize], min_consecutive_selections: usize) -> bool {
+    if indices.is_empty() {
+        return false;
+    }
+
+    if indices.len() == 1 {
+        return min_consecutive_selections <= 1;
+    }
+
+    // Count consecutive runs
+    let mut run_length = 1;
+    for i in 1..indices.len() {
+        if indices[i] == indices[i - 1] + 1 {
+            run_length += 1;
+        } else {
+            // End of a run - check if it meets minimum
+            if run_length < min_consecutive_selections {
+                return false;
+            }
+            run_length = 1;
+        }
+    }
+
+    // Check the last run
+    if run_length < min_consecutive_selections {
+        return false;
+    }
+
+    true
+}
+
 /// Find the cheapest periods in a sequence of prices
 #[pyfunction]
 fn get_cheapest_periods(
@@ -79,6 +111,12 @@ fn get_cheapest_periods(
     if prices.is_empty() {
         return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(
             "prices cannot be empty",
+        ));
+    }
+
+    if prices.len() > 29 {
+        return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(
+            "prices cannot contain more than 29 items",
         ));
     }
 
@@ -188,20 +226,33 @@ fn get_cheapest_periods(
         }
     }
 
-    // Merge cheap_items with cheapest_price_item_combination, adding any items from cheap_items not already present
-    let mut merged_combination = cheapest_price_item_combination;
-    let existing_indices: HashSet<usize> = merged_combination.iter().map(|(i, _)| *i).collect();
+    // Merge cheap_items with cheapest_price_item_combination, but only if they maintain valid consecutive runs
+    // Start with the valid combination found
+    let mut result_indices: Vec<usize> = cheapest_price_item_combination
+        .iter()
+        .map(|(i, _)| *i)
+        .collect();
+    let mut existing_indices: HashSet<usize> = result_indices.iter().cloned().collect();
 
+    // Try to add each cheap item that's not already included
     for item in cheap_items {
         if !existing_indices.contains(&item.0) {
-            merged_combination.push(item);
+            // Try adding this item and check if it maintains valid consecutive runs
+            let mut test_indices = result_indices.clone();
+            test_indices.push(item.0);
+            test_indices.sort();
+
+            if check_consecutive_runs(&test_indices, min_consecutive_selections) {
+                result_indices.push(item.0);
+                existing_indices.insert(item.0);
+            }
         }
     }
 
-    // Sort by index to maintain order
-    merged_combination.sort_by_key(|(i, _)| *i);
+    // Sort result by index
+    result_indices.sort();
 
-    Ok(merged_combination.into_iter().map(|(i, _)| i).collect())
+    Ok(result_indices)
 }
 
 /// A Python module implemented in Rust.

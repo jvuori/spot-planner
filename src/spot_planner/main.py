@@ -61,6 +61,42 @@ def _get_combination_cost(combination: tuple[tuple[int, Decimal], ...]) -> Decim
     return sum(price for _, price in combination) or Decimal("0")
 
 
+def _check_consecutive_runs(
+    indices: list[int], min_consecutive_selections: int
+) -> bool:
+    """Check if all consecutive runs in indices meet the minimum length requirement.
+
+    Args:
+        indices: Sorted list of indices
+        min_consecutive_selections: Minimum required length for each consecutive run
+
+    Returns:
+        True if all runs meet the requirement, False otherwise
+    """
+    if not indices:
+        return False
+
+    if len(indices) == 1:
+        return min_consecutive_selections <= 1
+
+    # Count consecutive runs
+    run_length = 1
+    for i in range(1, len(indices)):
+        if indices[i] == indices[i - 1] + 1:
+            run_length += 1
+        else:
+            # End of a run - check if it meets minimum
+            if run_length < min_consecutive_selections:
+                return False
+            run_length = 1
+
+    # Check the last run
+    if run_length < min_consecutive_selections:
+        return False
+
+    return True
+
+
 def _get_cheapest_periods_python(
     prices: Sequence[Decimal],
     low_price_threshold: Decimal,
@@ -114,17 +150,24 @@ def _get_cheapest_periods_python(
         msg = f"No combination found for {current_count} items"
         raise ValueError(msg)
 
-    # Merge cheap_items with cheapest_price_item_combination, adding any items from cheap_items not already present
-    merged_combination = list(cheapest_price_item_combination)
-    existing_indices = {i for i, _ in cheapest_price_item_combination}
+    # Merge cheap_items with cheapest_price_item_combination, but only if they maintain valid consecutive runs
+    # Start with the valid combination found
+    result_indices = [i for i, _ in cheapest_price_item_combination]
+    existing_indices = set(result_indices)
+
+    # Try to add each cheap item that's not already included
     for item in cheap_items:
         if item[0] not in existing_indices:
-            merged_combination.append(item)
-    # Sort by index to maintain order
-    merged_combination.sort(key=lambda x: x[0])
-    cheapest_price_item_combination = tuple(merged_combination)
+            # Try adding this item and check if it maintains valid consecutive runs
+            test_indices = sorted(result_indices + [item[0]])
+            if _check_consecutive_runs(test_indices, min_consecutive_selections):
+                result_indices.append(item[0])
+                existing_indices.add(item[0])
 
-    return [i for i, _ in cheapest_price_item_combination]
+    # Sort result by index
+    result_indices.sort()
+
+    return result_indices
 
 
 def get_cheapest_periods(
@@ -139,19 +182,21 @@ def get_cheapest_periods(
     Find optimal periods in a price sequence based on cost and timing constraints.
 
     This algorithm selects periods (indices) from a price sequence to minimize cost
-    while satisfying various timing constraints. The primary selection criterion is
-    the price threshold - all periods with prices at or below the threshold are
-    automatically selected regardless of other constraints.
+    while satisfying various timing constraints. The algorithm prioritizes periods
+    with prices at or below the threshold, but still respects all constraints including
+    min_consecutive_selections.
 
     Args:
         prices: Sequence of prices for each period. Each element represents the
                price for one time period (e.g., hourly, 15-minute intervals).
         low_price_threshold: Price threshold below/equal to which periods are
-                           automatically selected. All periods with price <= threshold
-                           will be included in the result regardless of other constraints.
+                           preferentially selected. Periods with price <= threshold
+                           will be included if they can form valid consecutive runs
+                           meeting the min_consecutive_selections constraint.
         min_selections: Minimum number of individual periods (indices) that must be
                        selected. The algorithm will select at least this many periods,
-                       but may select more if they are below the price threshold.
+                       but may select more if they are below the price threshold and
+                       satisfy all constraints.
         min_consecutive_selections: Minimum number of consecutive periods that must be
                                   selected together. Any selected period must be part of
                                   a run of at least this many consecutive selections.
@@ -164,7 +209,7 @@ def get_cheapest_periods(
                           before starting operations.
 
     Returns:
-        List of indices representing the selected periods, sorted by price (cheapest first).
+        List of indices representing the selected periods, sorted by index.
         The indices correspond to positions in the input prices sequence.
 
     Raises:
@@ -174,13 +219,13 @@ def get_cheapest_periods(
     Examples:
         >>> prices = [Decimal('0.05'), Decimal('0.08'), Decimal('0.12'), Decimal('0.06')]
         >>> get_cheapest_periods(prices, Decimal('0.10'), 2, 1, 1, 1)
-        [0, 3, 1]  # Selects periods 0, 1, 3 (all <= 0.10, sorted by price)
+        [0, 1, 3]  # Selects periods 0, 1, 3 (all <= 0.10 and form valid runs)
 
     Note:
-        The algorithm prioritizes periods below the price threshold. If all periods
-        are below the threshold, all periods will be selected regardless of other
-        constraints. If the desired number of periods equals the total number of
-        periods, all periods will be selected regardless of price.
+        The algorithm prioritizes periods below the price threshold but respects
+        all constraints. If all periods are below the threshold AND form valid
+        consecutive runs, all periods will be selected. If the desired number of
+        periods equals the total number of periods, all periods will be selected.
     """
     # Validate input parameters before calling either implementation
     if not prices:
