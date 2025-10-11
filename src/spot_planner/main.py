@@ -186,6 +186,9 @@ def get_cheapest_periods(
     if not prices:
         raise ValueError("prices cannot be empty")
 
+    if len(prices) > 29:
+        raise ValueError("prices cannot contain more than 29 items")
+
     if min_selections <= 0:
         raise ValueError("min_selections must be greater than 0")
 
@@ -196,7 +199,9 @@ def get_cheapest_periods(
         raise ValueError("min_consecutive_selections must be greater than 0")
 
     if min_consecutive_selections > min_selections:
-        raise ValueError("min_consecutive_selections cannot be greater than min_selections")
+        raise ValueError(
+            "min_consecutive_selections cannot be greater than min_selections"
+        )
 
     if max_gap_between_periods < 0:
         raise ValueError("max_gap_between_periods must be greater than or equal to 0")
@@ -205,7 +210,9 @@ def get_cheapest_periods(
         raise ValueError("max_gap_from_start must be greater than or equal to 0")
 
     if max_gap_from_start > max_gap_between_periods:
-        raise ValueError("max_gap_from_start must be less than or equal to max_gap_between_periods")
+        raise ValueError(
+            "max_gap_from_start must be less than or equal to max_gap_between_periods"
+        )
 
     if _RUST_AVAILABLE:
         # Use Rust implementation - convert Decimal objects to strings
