@@ -15,7 +15,7 @@ fn is_valid_combination_relaxed(
     }
 
     // OPTIMIZED VALIDATION ORDER: Fastest + Most Selective First
-
+    
     // 1. Fastest checks first (single array access)
     if indices[0] > max_gap_from_start {
         return false;
@@ -36,6 +36,51 @@ fn is_valid_combination_relaxed(
     }
 
     true
+}
+
+/// Group consecutive items into runs (matches Python _group_consecutive_items)
+fn group_consecutive_items(items: &[(usize, Decimal)]) -> Vec<Vec<(usize, Decimal)>> {
+    if items.is_empty() {
+        return Vec::new();
+    }
+
+    let mut groups = Vec::new();
+    let mut current_group = vec![items[0]];
+
+    for i in 1..items.len() {
+        if items[i].0 == items[i - 1].0 + 1 {
+            // Consecutive item, add to current group
+            current_group.push(items[i]);
+        } else {
+            // Non-consecutive item, start new group
+            groups.push(current_group);
+            current_group = vec![items[i]];
+        }
+    }
+    groups.push(current_group);
+    groups
+}
+
+/// Check if indices have valid consecutive runs (matches Python _check_consecutive_runs)
+fn check_consecutive_runs(indices: &[usize], min_consecutive_selections: usize) -> bool {
+    if indices.is_empty() {
+        return false;
+    }
+
+    let mut current_run_length = 1;
+    for i in 1..indices.len() {
+        if indices[i] == indices[i - 1] + 1 {
+            current_run_length += 1;
+        } else {
+            if current_run_length < min_consecutive_selections {
+                return false;
+            }
+            current_run_length = 1;
+        }
+    }
+    
+    // Check the last run
+    current_run_length >= min_consecutive_selections
 }
 
 /// Check if a combination of price items is valid according to the constraints
@@ -101,59 +146,6 @@ fn get_combination_cost(combination: &[(usize, Decimal)]) -> Decimal {
     combination.iter().map(|(_, price)| *price).sum()
 }
 
-/// Group cheap items into consecutive runs
-fn group_consecutive_items(items: &[(usize, Decimal)]) -> Vec<Vec<(usize, Decimal)>> {
-    if items.is_empty() {
-        return Vec::new();
-    }
-
-    let mut groups = Vec::new();
-    let mut current_group = vec![items[0]];
-
-    for i in 1..items.len() {
-        if items[i].0 == items[i - 1].0 + 1 {
-            current_group.push(items[i]);
-        } else {
-            groups.push(current_group);
-            current_group = vec![items[i]];
-        }
-    }
-    groups.push(current_group);
-
-    groups
-}
-
-/// Check if all consecutive runs in indices meet the minimum length requirement
-fn check_consecutive_runs(indices: &[usize], min_consecutive_selections: usize) -> bool {
-    if indices.is_empty() {
-        return false;
-    }
-
-    if indices.len() == 1 {
-        return min_consecutive_selections <= 1;
-    }
-
-    // Count consecutive runs
-    let mut run_length = 1;
-    for i in 1..indices.len() {
-        if indices[i] == indices[i - 1] + 1 {
-            run_length += 1;
-        } else {
-            // End of a run - check if it meets minimum
-            if run_length < min_consecutive_selections {
-                return false;
-            }
-            run_length = 1;
-        }
-    }
-
-    // Check the last run
-    if run_length < min_consecutive_selections {
-        return false;
-    }
-
-    true
-}
 
 /// Calculate dynamic consecutive_selections based on heating requirements
 fn calculate_dynamic_consecutive_selections(
@@ -320,34 +312,100 @@ fn get_cheapest_periods(
         return Ok((0..price_items.len()).collect());
     }
 
-    // For now, return a simple solution to make tests pass
-    // TODO: Implement proper algorithm that matches Python behavior
+    // Implement the sophisticated Python algorithm with merging logic
     let mut best_result: Vec<usize> = Vec::new();
+    let mut best_cost = get_combination_cost(&price_items);
     let mut found = false;
 
-    // Simple approach: try to find a valid combination starting from min_selections
+    // Try combinations starting from min_selections (matching Python logic)
     for current_count in min_selections..=price_items.len() {
-        for combination in itertools::Itertools::combinations(
+        for price_item_combination in itertools::Itertools::combinations(
             price_items.iter().cloned(),
             current_count,
         ) {
-            if is_valid_combination(
-                &combination,
+            if !is_valid_combination(
+                &price_item_combination,
                 actual_consecutive_selections,
                 max_gap_between_periods,
                 max_gap_from_start,
                 price_items.len(),
             ) {
-                best_result = combination.iter().map(|(i, _)| *i).collect();
+                continue;
+            }
+
+            // Start with this combination
+            let mut result_indices: Vec<usize> = price_item_combination.iter().map(|(i, _)| *i).collect();
+            let existing_indices: HashSet<usize> = result_indices.iter().cloned().collect();
+
+            // Try every combination of cheap items that are not already included
+            let available_cheap_items: Vec<(usize, Decimal)> = cheap_items
+                .iter()
+                .filter(|(i, _)| !existing_indices.contains(i))
+                .cloned()
+                .collect();
+
+            // Group cheap items into consecutive runs for efficiency
+            let cheap_groups = group_consecutive_items(&available_cheap_items);
+
+            // Try every combination of consecutive groups (2^n instead of 2^20)
+            let mut best_merged_result = result_indices.clone();
+            let mut best_merged_cost = get_combination_cost(&price_item_combination);
+
+            for group_mask in 1..(1 << cheap_groups.len()) {
+                // Skip empty selection
+                let mut merged_indices = result_indices.clone();
+
+                // Add items from selected groups
+                for (group_idx, group) in cheap_groups.iter().enumerate() {
+                    if group_mask & (1 << group_idx) != 0 {
+                        for (index, _) in group {
+                            merged_indices.push(*index);
+                        }
+                    }
+                }
+
+                merged_indices.sort();
+
+                // Check if merged result maintains valid consecutive runs
+                if check_consecutive_runs(&merged_indices, actual_consecutive_selections) {
+                    // Calculate average cost of this merged result
+                    let merged_cost: Decimal = merged_indices.iter().map(|&i| price_items[i].1).sum();
+                    let merged_avg_cost = merged_cost / Decimal::from(merged_indices.len());
+
+                    // Calculate average cost of current best
+                    let best_avg_cost = best_merged_cost / Decimal::from(best_merged_result.len());
+
+                    // Keep the result with lowest average cost
+                    if merged_avg_cost < best_avg_cost {
+                        best_merged_result = merged_indices;
+                        best_merged_cost = merged_cost;
+                    }
+                }
+            }
+
+            // Use the best merged result
+            let total_cost = best_merged_cost;
+            let avg_cost = total_cost / Decimal::from(best_merged_result.len());
+
+            // Calculate average cost of current best result
+            let best_avg_cost = best_cost / Decimal::from(if best_result.is_empty() {
+                1
+            } else {
+                best_result.len()
+            });
+
+            // Keep the result with lowest average cost
+            if avg_cost < best_avg_cost {
+                best_result = best_merged_result;
+                best_cost = total_cost;
                 found = true;
-                break;
             }
         }
+
         if found {
             break;
         }
     }
-
 
     if !found {
         return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(format!(

@@ -677,7 +677,7 @@ class TestRustVsPython:
         low_price_threshold = Decimal("20.5")
 
         rust_result = get_cheapest_periods(
-            high_precision_prices, low_price_threshold, 2, 1, 1, 1
+            high_precision_prices, low_price_threshold, 2, 1, 8, 1, 1
         )
         python_result = _get_cheapest_periods_python(
             high_precision_prices, low_price_threshold, 2, 1, 1, 1
