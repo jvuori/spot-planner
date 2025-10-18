@@ -126,6 +126,27 @@ def _get_combination_cost(combination: tuple[tuple[int, Decimal], ...]) -> Decim
     return sum(price for _, price in combination) or Decimal("0")
 
 
+def _group_consecutive_items(
+    items: Sequence[tuple[int, Decimal]],
+) -> list[list[tuple[int, Decimal]]]:
+    """Group cheap items into consecutive runs."""
+    if not items:
+        return []
+
+    groups = []
+    current_group = [items[0]]
+
+    for i in range(1, len(items)):
+        if items[i][0] == items[i - 1][0] + 1:
+            current_group.append(items[i])
+        else:
+            groups.append(current_group)
+            current_group = [items[i]]
+    groups.append(current_group)
+
+    return groups
+
+
 def _check_consecutive_runs(
     indices: list[int], min_consecutive_selections: int
 ) -> bool:
@@ -174,8 +195,18 @@ def _get_cheapest_periods_python(
     cheap_items: tuple[tuple[int, Decimal], ...] = tuple(
         (index, price) for index, price in price_items if price <= low_price_threshold
     )
-    # Start with min_selections as minimum, increment if no valid combination found
-    actual_count = min_selections
+    # Calculate actual consecutive selections based on cheap percentage
+    cheap_percentage = len(cheap_items) / len(price_items)
+    if cheap_percentage > 0.8:
+        actual_consecutive_selections = min_consecutive_selections
+    else:
+        actual_consecutive_selections = calculate_dynamic_consecutive_selections(
+            min_consecutive_selections,
+            8,
+            min_selections,
+            len(price_items),
+            max_gap_between_periods,
+        )
 
     # Special case: if min_selections equals total items, return all of them
     if min_selections == len(price_items):
@@ -185,19 +216,19 @@ def _get_cheapest_periods_python(
     if len(cheap_items) == len(price_items):
         return list(range(len(price_items)))
 
-    # Generate all combinations of the required size and find the best one after merging with cheap items
+    # Generate all combinations and find the best one after merging with cheap items
     best_result = []
     best_cost = _get_combination_cost(price_items)
     found = False
-    current_count = actual_count
 
-    while not found and current_count <= len(price_items):
+    # Try combinations starting from min_selections
+    for current_count in range(min_selections, len(price_items) + 1):
         for price_item_combination in itertools.combinations(
             price_items, current_count
         ):
             if not _is_valid_combination(
                 price_item_combination,
-                min_consecutive_selections,
+                actual_consecutive_selections,
                 max_gap_between_periods,
                 max_gap_from_start,
                 len(price_items),
@@ -208,32 +239,69 @@ def _get_cheapest_periods_python(
             result_indices = [i for i, _ in price_item_combination]
             existing_indices = set(result_indices)
 
-            # Try to add each cheap item that's not already included
-            for item in cheap_items:
-                if item[0] not in existing_indices:
-                    # Try adding this item and check if it maintains valid consecutive runs
-                    test_indices = sorted(result_indices + [item[0]])
-                    if _check_consecutive_runs(
-                        test_indices, min_consecutive_selections
-                    ):
-                        result_indices.append(item[0])
-                        existing_indices.add(item[0])
+            # Try every combination of cheap items that are not already included
+            available_cheap_items = [
+                item for item in cheap_items if item[0] not in existing_indices
+            ]
 
-            # Calculate the total cost of this combination + merged cheap items
-            total_cost = sum(prices[i] for i in result_indices)
+            # Group cheap items into consecutive runs for efficiency
+            cheap_groups = _group_consecutive_items(available_cheap_items)
 
-            if total_cost < best_cost:
-                best_result = result_indices
+            # Try every combination of consecutive groups (2^n instead of 2^20)
+            best_merged_result = result_indices.copy()
+            best_merged_cost = _get_combination_cost(
+                [(i, prices[i]) for i in result_indices]
+            )
+
+            for group_mask in range(1, 2 ** len(cheap_groups)):  # Skip empty selection
+                merged_indices = result_indices.copy()
+
+                # Add items from selected groups
+                for group_idx, group in enumerate(cheap_groups):
+                    if group_mask & (1 << group_idx):
+                        for index, _ in group:
+                            merged_indices.append(index)
+
+                merged_indices.sort()
+
+                # Check if merged result maintains valid consecutive runs
+                if _check_consecutive_runs(
+                    merged_indices, actual_consecutive_selections
+                ):
+                    # Calculate average cost of this merged result
+                    merged_cost = sum(prices[i] for i in merged_indices)
+                    merged_avg_cost = merged_cost / len(merged_indices)
+
+                    # Calculate average cost of current best
+                    best_avg_cost = best_merged_cost / len(best_merged_result)
+
+                    # Keep the result with lowest average cost
+                    if merged_avg_cost < best_avg_cost:
+                        best_merged_result = merged_indices
+                        best_merged_cost = merged_cost
+
+            # Use the best merged result
+            total_cost = best_merged_cost
+            avg_cost = total_cost / len(best_merged_result)
+
+            # Compare average costs, not total costs
+            best_avg_cost = (
+                best_cost / len(best_result) if best_result else float("inf")
+            )
+
+            if avg_cost < best_avg_cost:
+                best_result = best_merged_result
                 best_cost = total_cost
                 found = True
-        current_count += 1
+
+        # If we found a valid combination at this size, don't try larger sizes
+        if found:
+            break
 
     if not found:
-        msg = f"No combination found for {current_count} items"
-        raise ValueError(msg)
-
-    # Sort result by index
-    best_result.sort()
+        raise ValueError(
+            f"No valid combination found that satisfies the constraints for {len(price_items)} items"
+        )
 
     return best_result
 
