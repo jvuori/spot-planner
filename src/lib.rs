@@ -15,7 +15,7 @@ fn is_valid_combination_relaxed(
     }
 
     // OPTIMIZED VALIDATION ORDER: Fastest + Most Selective First
-    
+
     // 1. Fastest checks first (single array access)
     if indices[0] > max_gap_from_start {
         return false;
@@ -78,7 +78,7 @@ fn check_consecutive_runs(indices: &[usize], min_consecutive_selections: usize) 
             current_run_length = 1;
         }
     }
-    
+
     // Check the last run
     current_run_length >= min_consecutive_selections
 }
@@ -145,7 +145,6 @@ fn is_valid_combination(
 fn get_combination_cost(combination: &[(usize, Decimal)]) -> Decimal {
     combination.iter().map(|(_, price)| *price).sum()
 }
-
 
 /// Calculate dynamic consecutive_selections based on heating requirements
 fn calculate_dynamic_consecutive_selections(
@@ -319,10 +318,9 @@ fn get_cheapest_periods(
 
     // Try combinations starting from min_selections (matching Python logic)
     for current_count in min_selections..=price_items.len() {
-        for price_item_combination in itertools::Itertools::combinations(
-            price_items.iter().cloned(),
-            current_count,
-        ) {
+        for price_item_combination in
+            itertools::Itertools::combinations(price_items.iter().cloned(), current_count)
+        {
             if !is_valid_combination(
                 &price_item_combination,
                 actual_consecutive_selections,
@@ -334,7 +332,8 @@ fn get_cheapest_periods(
             }
 
             // Start with this combination
-            let mut result_indices: Vec<usize> = price_item_combination.iter().map(|(i, _)| *i).collect();
+            let mut result_indices: Vec<usize> =
+                price_item_combination.iter().map(|(i, _)| *i).collect();
             let existing_indices: HashSet<usize> = result_indices.iter().cloned().collect();
 
             // Try every combination of cheap items that are not already included
@@ -369,7 +368,8 @@ fn get_cheapest_periods(
                 // Check if merged result maintains valid consecutive runs
                 if check_consecutive_runs(&merged_indices, actual_consecutive_selections) {
                     // Calculate average cost of this merged result
-                    let merged_cost: Decimal = merged_indices.iter().map(|&i| price_items[i].1).sum();
+                    let merged_cost: Decimal =
+                        merged_indices.iter().map(|&i| price_items[i].1).sum();
                     let merged_avg_cost = merged_cost / Decimal::from(merged_indices.len());
 
                     // Calculate average cost of current best
@@ -388,11 +388,12 @@ fn get_cheapest_periods(
             let avg_cost = total_cost / Decimal::from(best_merged_result.len());
 
             // Calculate average cost of current best result
-            let best_avg_cost = best_cost / Decimal::from(if best_result.is_empty() {
-                1
-            } else {
-                best_result.len()
-            });
+            let best_avg_cost = best_cost
+                / Decimal::from(if best_result.is_empty() {
+                    1
+                } else {
+                    best_result.len()
+                });
 
             // Keep the result with lowest average cost
             if avg_cost < best_avg_cost {

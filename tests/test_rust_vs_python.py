@@ -581,6 +581,7 @@ class TestRustVsPython:
                     low_price_threshold,
                     min_selections,
                     min_consecutive_selections,
+                    8,  # max_consecutive_selections
                     max_gap_between_periods,
                     max_gap_from_start,
                 )
@@ -638,11 +639,14 @@ class TestRustVsPython:
         # Use the same data as the original performance test but with more variations
         base_prices = [Decimal(f"{i}") for i in range(20)]
 
+        # Fix parameter validation issues
+        max_consecutive = 8 if min_consecutive_selections <= 8 else min_consecutive_selections + 1
         rust_result = get_cheapest_periods(
             base_prices,
             low_price_threshold,
             min_selections,
             min_consecutive_selections,
+            max_consecutive,
             max_gap_between_periods,
             max_gap_from_start,
         )

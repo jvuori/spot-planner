@@ -39,6 +39,8 @@ def calculate_dynamic_consecutive_selections(
         Calculated consecutive_selections value between min and max
     """
     # Calculate percentage of min_selections relative to total prices
+    if total_prices == 0:
+        return min_consecutive_selections
     min_selections_percentage = min_selections / total_prices
 
     # Base calculation based on percentage rules:
@@ -196,6 +198,8 @@ def _get_cheapest_periods_python(
         (index, price) for index, price in price_items if price <= low_price_threshold
     )
     # Calculate actual consecutive selections based on cheap percentage
+    if len(price_items) == 0:
+        return []
     cheap_percentage = len(cheap_items) / len(price_items)
     if cheap_percentage > 0.8:
         actual_consecutive_selections = min_consecutive_selections
