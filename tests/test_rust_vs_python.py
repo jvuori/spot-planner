@@ -318,6 +318,7 @@ class TestRustVsPython:
                 low_price_threshold,
                 min_selections,
                 min_consecutive_selections,
+                8,  # max_consecutive_selections
                 max_gap_between_periods,
                 max_gap_from_start,
             )
@@ -430,6 +431,7 @@ class TestRustVsPython:
                 low_price_threshold,
                 min_selections,
                 min_consecutive_selections,
+                8,  # max_consecutive_selections
                 max_gap_between_periods,
                 max_gap_from_start,
             )
@@ -506,6 +508,7 @@ class TestRustVsPython:
                 low_price_threshold,
                 min_selections,
                 min_consecutive_selections,
+                8,  # max_consecutive_selections
                 max_gap_between_periods,
                 max_gap_from_start,
             )
