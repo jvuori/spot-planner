@@ -358,7 +358,8 @@ def get_cheapest_periods(
             prices_str,
             low_price_threshold_str,
             min_selections,
-            actual_consecutive_selections,
+            min_consecutive_selections,
+            max_consecutive_selections,
             max_gap_between_periods,
             max_gap_from_start,
         )

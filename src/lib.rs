@@ -154,14 +154,47 @@ fn get_cheapest_periods(
     max_gap_between_periods: usize,
     max_gap_from_start: usize,
 ) -> PyResult<Vec<usize>> {
+    // Convert Python list to Vec<Decimal>
+    let prices: Vec<Decimal> = prices
+        .iter()
+        .map(|item| {
+            let decimal_str = item.extract::<String>()?;
+            decimal_str
+                .parse::<Decimal>()
+                .map_err(|_| PyErr::new::<pyo3::exceptions::PyValueError, _>("Invalid decimal"))
+        })
+        .collect::<PyResult<Vec<Decimal>>>()?;
+
+    let low_price_threshold: Decimal = low_price_threshold
+        .parse::<Decimal>()
+        .map_err(|_| PyErr::new::<pyo3::exceptions::PyValueError, _>("Invalid decimal"))?;
+
+    let price_items: Vec<(usize, Decimal)> = prices.clone().into_iter().enumerate().collect();
+
+    let cheap_items: Vec<(usize, Decimal)> = price_items
+        .iter()
+        .filter(|(_, price)| *price <= low_price_threshold)
+        .cloned()
+        .collect();
+
+    // If we have mostly cheap items, be more permissive with consecutive requirements
+    let cheap_items_count = cheap_items.len();
+    let cheap_percentage = cheap_items_count as f64 / prices.len() as f64;
+
     // Calculate dynamic consecutive_selections based on min/max bounds
-    let actual_consecutive_selections = calculate_dynamic_consecutive_selections(
-        min_consecutive_selections,
-        max_consecutive_selections,
-        min_selections,
-        prices.len(),
-        max_gap_between_periods,
-    );
+    let actual_consecutive_selections = if cheap_percentage > 0.8 {
+        // If more than 80% of items are cheap, use minimum consecutive requirement
+        min_consecutive_selections
+    } else {
+        // Otherwise, use the dynamic calculation
+        calculate_dynamic_consecutive_selections(
+            min_consecutive_selections,
+            max_consecutive_selections,
+            min_selections,
+            prices.len(),
+            max_gap_between_periods,
+        )
+    };
 
     // Validate input parameters
     if prices.is_empty() {
@@ -214,29 +247,6 @@ fn get_cheapest_periods(
             "max_gap_from_start must be less than or equal to max_gap_between_periods",
         ));
     }
-
-    // Convert Python list to Vec<Decimal>
-    let prices: Vec<Decimal> = prices
-        .iter()
-        .map(|item| {
-            let decimal_str = item.extract::<String>()?;
-            decimal_str
-                .parse::<Decimal>()
-                .map_err(|_| PyErr::new::<pyo3::exceptions::PyValueError, _>("Invalid decimal"))
-        })
-        .collect::<PyResult<Vec<Decimal>>>()?;
-
-    let low_price_threshold: Decimal = low_price_threshold
-        .parse::<Decimal>()
-        .map_err(|_| PyErr::new::<pyo3::exceptions::PyValueError, _>("Invalid decimal"))?;
-
-    let price_items: Vec<(usize, Decimal)> = prices.into_iter().enumerate().collect();
-
-    let cheap_items: Vec<(usize, Decimal)> = price_items
-        .iter()
-        .filter(|(_, price)| *price <= low_price_threshold)
-        .cloned()
-        .collect();
 
     // Start with min_selections as minimum, increment if no valid combination found
     let actual_count = min_selections;
@@ -304,8 +314,8 @@ fn get_cheapest_periods(
             current_count += 1;
             if current_count > price_items.len() {
                 return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(format!(
-                    "No combination found for {} items",
-                    current_count
+                    "No valid combination found that satisfies the constraints for {} items",
+                    price_items.len()
                 )));
             }
         }
