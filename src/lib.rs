@@ -96,17 +96,73 @@ fn check_consecutive_runs(indices: &[usize], min_consecutive_selections: usize) 
     true
 }
 
+/// Calculate dynamic consecutive_selections based on heating requirements
+fn calculate_dynamic_consecutive_selections(
+    min_consecutive_selections: usize,
+    max_consecutive_selections: usize,
+    min_selections: usize,
+    total_prices: usize,
+    max_gap_between_periods: usize,
+) -> usize {
+    // Calculate percentage of min_selections relative to total prices
+    let min_selections_percentage = min_selections as f64 / total_prices as f64;
+
+    // Base calculation based on percentage rules:
+    // - < 25% of total prices: use min_consecutive_selections
+    // - > 75% of total prices: use max_consecutive_selections
+    // - Between 25-75%: linear interpolation
+    let base_consecutive = if min_selections_percentage <= 0.25 {
+        min_consecutive_selections
+    } else if min_selections_percentage >= 0.75 {
+        max_consecutive_selections
+    } else {
+        // Linear interpolation between 25% and 75%
+        // Map 0.25-0.75 to 0.0-1.0 for interpolation
+        let interpolation_factor = (min_selections_percentage - 0.25) / (0.75 - 0.25);
+        min_consecutive_selections
+            + (interpolation_factor
+                * (max_consecutive_selections - min_consecutive_selections) as f64)
+                as usize
+    };
+
+    // Adjust based on gap between periods
+    // Larger gaps mean more consecutive heating needed
+    // Scale gap adjustment: larger gaps push toward max_consecutive_selections
+    let gap_factor = (max_gap_between_periods as f64 / 10.0).min(1.0); // Normalize gap to 0-1
+    let gap_adjustment =
+        (gap_factor * (max_consecutive_selections - min_consecutive_selections) as f64) as usize;
+
+    // Final calculation: base + gap adjustment
+    let dynamic_consecutive = base_consecutive + gap_adjustment;
+
+    // Ensure result is within bounds
+    dynamic_consecutive
+        .max(min_consecutive_selections)
+        .min(max_consecutive_selections)
+}
+
 /// Find the cheapest periods in a sequence of prices
 #[pyfunction]
+#[pyo3(signature = (prices, low_price_threshold, min_selections, min_consecutive_selections, max_consecutive_selections, max_gap_between_periods=0, max_gap_from_start=0))]
 fn get_cheapest_periods(
     _py: Python,
     prices: &Bound<'_, PyList>,
     low_price_threshold: &str,
     min_selections: usize,
     min_consecutive_selections: usize,
+    max_consecutive_selections: usize,
     max_gap_between_periods: usize,
     max_gap_from_start: usize,
 ) -> PyResult<Vec<usize>> {
+    // Calculate dynamic consecutive_selections based on min/max bounds
+    let actual_consecutive_selections = calculate_dynamic_consecutive_selections(
+        min_consecutive_selections,
+        max_consecutive_selections,
+        min_selections,
+        prices.len(),
+        max_gap_between_periods,
+    );
+
     // Validate input parameters
     if prices.is_empty() {
         return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(
@@ -138,9 +194,21 @@ fn get_cheapest_periods(
         ));
     }
 
-    if min_consecutive_selections > min_selections {
+    if max_consecutive_selections == 0 {
         return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(
-            "min_consecutive_selections cannot be greater than min_selections",
+            "max_consecutive_selections must be greater than 0",
+        ));
+    }
+
+    if min_consecutive_selections > max_consecutive_selections {
+        return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(
+            "min_consecutive_selections cannot be greater than max_consecutive_selections",
+        ));
+    }
+
+    if actual_consecutive_selections > min_selections {
+        return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(
+            "calculated consecutive_selections cannot be greater than min_selections",
         ));
     }
 
@@ -199,7 +267,7 @@ fn get_cheapest_periods(
         {
             if !is_valid_combination(
                 &combination,
-                min_consecutive_selections,
+                actual_consecutive_selections,
                 max_gap_between_periods,
                 max_gap_from_start,
                 price_items.len(),
@@ -242,7 +310,7 @@ fn get_cheapest_periods(
             test_indices.push(item.0);
             test_indices.sort();
 
-            if check_consecutive_runs(&test_indices, min_consecutive_selections) {
+            if check_consecutive_runs(&test_indices, actual_consecutive_selections) {
                 result_indices.push(item.0);
                 existing_indices.insert(item.0);
             }

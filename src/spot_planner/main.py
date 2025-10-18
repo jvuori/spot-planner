@@ -11,6 +11,71 @@ except ImportError:
     _RUST_AVAILABLE = False
 
 
+def calculate_dynamic_consecutive_selections(
+    min_consecutive_selections: int,
+    max_consecutive_selections: int,
+    min_selections: int,
+    total_prices: int,
+    max_gap_between_periods: int,
+) -> int:
+    """
+    Calculate dynamic consecutive_selections based on heating requirements.
+
+    This function calculates the actual consecutive selections needed based on:
+    - min_consecutive_selections: Minimum allowed consecutive selections
+    - max_consecutive_selections: Maximum allowed consecutive selections
+    - min_selections: Total selections needed (correlates with historical heating duration)
+    - total_prices: Total number of price periods available
+    - max_gap_between_periods: Maximum gap between heating periods
+
+    Args:
+        min_consecutive_selections: Minimum allowed consecutive selections
+        max_consecutive_selections: Maximum allowed consecutive selections
+        min_selections: Total selections needed (correlates with historical heating duration)
+        total_prices: Total number of price periods available
+        max_gap_between_periods: Maximum gap between heating periods
+
+    Returns:
+        Calculated consecutive_selections value between min and max
+    """
+    # Calculate percentage of min_selections relative to total prices
+    min_selections_percentage = min_selections / total_prices
+
+    # Base calculation based on percentage rules:
+    # - < 25% of total prices: use min_consecutive_selections
+    # - > 75% of total prices: use max_consecutive_selections
+    # - Between 25-75%: linear interpolation
+    if min_selections_percentage <= 0.25:
+        base_consecutive = min_consecutive_selections
+    elif min_selections_percentage >= 0.75:
+        base_consecutive = max_consecutive_selections
+    else:
+        # Linear interpolation between 25% and 75%
+        # Map 0.25-0.75 to 0.0-1.0 for interpolation
+        interpolation_factor = (min_selections_percentage - 0.25) / (0.75 - 0.25)
+        base_consecutive = int(
+            min_consecutive_selections
+            + interpolation_factor
+            * (max_consecutive_selections - min_consecutive_selections)
+        )
+
+    # Adjust based on gap between periods
+    # Larger gaps mean more consecutive heating needed
+    # Scale gap adjustment: larger gaps push toward max_consecutive_selections
+    gap_factor = min(max_gap_between_periods / 10.0, 1.0)  # Normalize gap to 0-1
+    gap_adjustment = int(
+        gap_factor * (max_consecutive_selections - min_consecutive_selections)
+    )
+
+    # Final calculation: base + gap adjustment
+    dynamic_consecutive = base_consecutive + gap_adjustment
+
+    # Ensure result is within bounds
+    return max(
+        min_consecutive_selections, min(dynamic_consecutive, max_consecutive_selections)
+    )
+
+
 def _is_valid_combination(
     combination: tuple[tuple[int, Decimal], ...],
     min_consecutive_selections: int,
@@ -175,8 +240,9 @@ def get_cheapest_periods(
     low_price_threshold: Decimal,
     min_selections: int,
     min_consecutive_selections: int,
-    max_gap_between_periods: int,
-    max_gap_from_start: int,
+    max_consecutive_selections: int,
+    max_gap_between_periods: int = 0,
+    max_gap_from_start: int = 0,
 ) -> list[int]:
     """
     Find optimal periods in a price sequence based on cost and timing constraints.
@@ -184,7 +250,7 @@ def get_cheapest_periods(
     This algorithm selects periods (indices) from a price sequence to minimize cost
     while satisfying various timing constraints. The algorithm prioritizes periods
     with prices at or below the threshold, but still respects all constraints including
-    min_consecutive_selections.
+    dynamic consecutive_selections calculation.
 
     Args:
         prices: Sequence of prices for each period. Each element represents the
@@ -192,15 +258,16 @@ def get_cheapest_periods(
         low_price_threshold: Price threshold below/equal to which periods are
                            preferentially selected. Periods with price <= threshold
                            will be included if they can form valid consecutive runs
-                           meeting the min_consecutive_selections constraint.
+                           meeting the consecutive_selections constraint.
         min_selections: Minimum number of individual periods (indices) that must be
-                       selected. The algorithm will select at least this many periods,
-                       but may select more if they are below the price threshold and
-                       satisfy all constraints.
+                       selected. This also represents historical heating duration
+                       (higher values = more heating in past 24h).
         min_consecutive_selections: Minimum number of consecutive periods that must be
-                                  selected together. Any selected period must be part of
-                                  a run of at least this many consecutive selections.
-                                  Prevents isolated single-period selections.
+                                  selected together. The actual value will be calculated
+                                  dynamically between this and max_consecutive_selections.
+        max_consecutive_selections: Maximum number of consecutive periods that can be
+                                  selected together. The actual value will be calculated
+                                  dynamically between min_consecutive_selections and this.
         max_gap_between_periods: Maximum number of periods allowed between selected
                                periods. Controls the maximum downtime between operating
                                periods. Set to 0 to require consecutive selections only.
@@ -218,15 +285,30 @@ def get_cheapest_periods(
 
     Examples:
         >>> prices = [Decimal('0.05'), Decimal('0.08'), Decimal('0.12'), Decimal('0.06')]
-        >>> get_cheapest_periods(prices, Decimal('0.10'), 2, 1, 1, 1)
+        >>> get_cheapest_periods(prices, Decimal('0.10'), 2, 1, 3, 1, 1)
         [0, 1, 3]  # Selects periods 0, 1, 3 (all <= 0.10 and form valid runs)
+
+        >>> # Dynamic calculation based on min_selections percentage and gaps
+        >>> get_cheapest_periods(prices, Decimal('0.10'), 6, 2, 5, 3, 2)
+        [0, 1, 3]  # consecutive_selections calculated dynamically between 2-5
 
     Note:
         The algorithm prioritizes periods below the price threshold but respects
-        all constraints. If all periods are below the threshold AND form valid
-        consecutive runs, all periods will be selected. If the desired number of
-        periods equals the total number of periods, all periods will be selected.
+        all constraints. The actual consecutive_selections value is calculated dynamically:
+        - If min_selections < 25% of total prices: use min_consecutive_selections
+        - If min_selections > 75% of total prices: use max_consecutive_selections
+        - Between 25-75%: linear interpolation between min and max
+        - Larger gaps push the result closer to max_consecutive_selections
     """
+    # Calculate dynamic consecutive_selections based on min/max bounds
+    actual_consecutive_selections = calculate_dynamic_consecutive_selections(
+        min_consecutive_selections=min_consecutive_selections,
+        max_consecutive_selections=max_consecutive_selections,
+        min_selections=min_selections,
+        total_prices=len(prices),
+        max_gap_between_periods=max_gap_between_periods,
+    )
+
     # Validate input parameters before calling either implementation
     if not prices:
         raise ValueError("prices cannot be empty")
@@ -243,9 +325,17 @@ def get_cheapest_periods(
     if min_consecutive_selections <= 0:
         raise ValueError("min_consecutive_selections must be greater than 0")
 
-    if min_consecutive_selections > min_selections:
+    if max_consecutive_selections <= 0:
+        raise ValueError("max_consecutive_selections must be greater than 0")
+
+    if min_consecutive_selections > max_consecutive_selections:
         raise ValueError(
-            "min_consecutive_selections cannot be greater than min_selections"
+            "min_consecutive_selections cannot be greater than max_consecutive_selections"
+        )
+
+    if actual_consecutive_selections > min_selections:
+        raise ValueError(
+            "calculated consecutive_selections cannot be greater than min_selections"
         )
 
     if max_gap_between_periods < 0:
@@ -267,7 +357,7 @@ def get_cheapest_periods(
             prices_str,
             low_price_threshold_str,
             min_selections,
-            min_consecutive_selections,
+            actual_consecutive_selections,
             max_gap_between_periods,
             max_gap_from_start,
         )
@@ -277,7 +367,7 @@ def get_cheapest_periods(
             prices,
             low_price_threshold,
             min_selections,
-            min_consecutive_selections,
+            actual_consecutive_selections,
             max_gap_between_periods,
             max_gap_from_start,
         )
