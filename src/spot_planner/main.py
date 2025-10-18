@@ -175,7 +175,7 @@ def _get_cheapest_periods_python(
         (index, price) for index, price in price_items if price <= low_price_threshold
     )
     # Start with min_selections as minimum, increment if no valid combination found
-    actual_count = max(min_selections, len(cheap_items))
+    actual_count = min_selections
 
     # Special case: if min_selections equals total items, return all of them
     if min_selections == len(price_items):
@@ -185,10 +185,9 @@ def _get_cheapest_periods_python(
     if len(cheap_items) == len(price_items):
         return list(range(len(price_items)))
 
-    cheapest_price_item_combination: tuple[tuple[int, Decimal], ...] = ()
-    cheapest_cost: Decimal = _get_combination_cost(price_items)
-
-    # Generate all combinations of the required size
+    # Generate all combinations of the required size and find the best one after merging with cheap items
+    best_result = []
+    best_cost = _get_combination_cost(price_items)
     found = False
     current_count = actual_count
 
@@ -204,10 +203,28 @@ def _get_cheapest_periods_python(
                 len(price_items),
             ):
                 continue
-            combination_cost = _get_combination_cost(price_item_combination)
-            if combination_cost < cheapest_cost:
-                cheapest_price_item_combination = price_item_combination
-                cheapest_cost = combination_cost
+
+            # Start with this combination
+            result_indices = [i for i, _ in price_item_combination]
+            existing_indices = set(result_indices)
+
+            # Try to add each cheap item that's not already included
+            for item in cheap_items:
+                if item[0] not in existing_indices:
+                    # Try adding this item and check if it maintains valid consecutive runs
+                    test_indices = sorted(result_indices + [item[0]])
+                    if _check_consecutive_runs(
+                        test_indices, min_consecutive_selections
+                    ):
+                        result_indices.append(item[0])
+                        existing_indices.add(item[0])
+
+            # Calculate the total cost of this combination + merged cheap items
+            total_cost = sum(prices[i] for i in result_indices)
+
+            if total_cost < best_cost:
+                best_result = result_indices
+                best_cost = total_cost
                 found = True
         current_count += 1
 
@@ -215,24 +232,10 @@ def _get_cheapest_periods_python(
         msg = f"No combination found for {current_count} items"
         raise ValueError(msg)
 
-    # Merge cheap_items with cheapest_price_item_combination, but only if they maintain valid consecutive runs
-    # Start with the valid combination found
-    result_indices = [i for i, _ in cheapest_price_item_combination]
-    existing_indices = set(result_indices)
-
-    # Try to add each cheap item that's not already included
-    for item in cheap_items:
-        if item[0] not in existing_indices:
-            # Try adding this item and check if it maintains valid consecutive runs
-            test_indices = sorted(result_indices + [item[0]])
-            if _check_consecutive_runs(test_indices, min_consecutive_selections):
-                result_indices.append(item[0])
-                existing_indices.add(item[0])
-
     # Sort result by index
-    result_indices.sort()
+    best_result.sort()
 
-    return result_indices
+    return best_result
 
 
 def get_cheapest_periods(

@@ -233,14 +233,19 @@ class TestGetCheapestPeriodsWithDynamicCalculation(unittest.TestCase):
         selected_prices = [float(PRICE_DATA[i]) for i in periods]
         cheap_indices = {3, 4, 5}  # Indices with price <= 25
 
-        # At least the cheap items should be included
-        cheap_selected = [i for i in periods if i in cheap_indices]
-        assert len(cheap_selected) >= 3  # At least 3 cheap items should be selected
+        # The algorithm should select the cheapest valid combination and add cheap items
+        # With min=max=1, it should pick the 3 cheapest overall items, then add cheap items
+        assert len(periods) >= 3  # Should select at least 3 items
 
         # Verify the cheapest items are included
         assert 4 in periods  # Index 4 has the lowest price (10.0)
+        # Should include the cheap items (indices 3, 4, 5 with prices 20, 10, 20)
         assert 3 in periods  # Index 3 has price 20.0
         assert 5 in periods  # Index 5 has price 20.0
+
+        # Verify it's a valid combination (all items can form consecutive runs with min_consecutive=1)
+        selected_prices = [float(PRICE_DATA[i]) for i in periods]
+        print(f"Selected: {periods}, prices: {selected_prices}")
 
     def test_min_max_both_one_exact_selection(self):
         """Test that when min and max are both 1, algorithm picks exactly the cheapest when forced."""

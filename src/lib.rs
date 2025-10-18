@@ -239,7 +239,7 @@ fn get_cheapest_periods(
         .collect();
 
     // Start with min_selections as minimum, increment if no valid combination found
-    let actual_count = std::cmp::max(min_selections, cheap_items.len());
+    let actual_count = min_selections;
 
     // Special case: if min_selections equals total items, return all of them
     if min_selections == price_items.len() {
@@ -251,10 +251,9 @@ fn get_cheapest_periods(
         return Ok((0..price_items.len()).collect());
     }
 
-    let mut cheapest_price_item_combination: Vec<(usize, Decimal)> = Vec::new();
-    let mut cheapest_cost = get_combination_cost(&price_items);
-
-    // Generate all combinations of the required size
+    // Generate all combinations of the required size and find the best one after merging with cheap items
+    let mut best_result: Vec<usize> = Vec::new();
+    let mut best_cost = get_combination_cost(&price_items);
     let mut found = false;
     let mut current_count = actual_count;
 
@@ -272,10 +271,31 @@ fn get_cheapest_periods(
                 continue;
             }
 
-            let combination_cost = get_combination_cost(&combination);
-            if combination_cost < cheapest_cost {
-                cheapest_price_item_combination = combination.to_vec();
-                cheapest_cost = combination_cost;
+            // Start with this combination
+            let mut result_indices: Vec<usize> = combination.iter().map(|(i, _)| *i).collect();
+            let mut existing_indices: HashSet<usize> = result_indices.iter().cloned().collect();
+
+            // Try to add each cheap item that's not already included
+            for item in &cheap_items {
+                if !existing_indices.contains(&item.0) {
+                    // Try adding this item and check if it maintains valid consecutive runs
+                    let mut test_indices = result_indices.clone();
+                    test_indices.push(item.0);
+                    test_indices.sort();
+
+                    if check_consecutive_runs(&test_indices, actual_consecutive_selections) {
+                        result_indices.push(item.0);
+                        existing_indices.insert(item.0);
+                    }
+                }
+            }
+
+            // Calculate the total cost of this combination + merged cheap items
+            let total_cost = result_indices.iter().map(|&i| price_items[i].1).sum();
+
+            if total_cost < best_cost {
+                best_result = result_indices;
+                best_cost = total_cost;
                 found = true;
             }
         }
@@ -291,33 +311,10 @@ fn get_cheapest_periods(
         }
     }
 
-    // Merge cheap_items with cheapest_price_item_combination, but only if they maintain valid consecutive runs
-    // Start with the valid combination found
-    let mut result_indices: Vec<usize> = cheapest_price_item_combination
-        .iter()
-        .map(|(i, _)| *i)
-        .collect();
-    let mut existing_indices: HashSet<usize> = result_indices.iter().cloned().collect();
-
-    // Try to add each cheap item that's not already included
-    for item in cheap_items {
-        if !existing_indices.contains(&item.0) {
-            // Try adding this item and check if it maintains valid consecutive runs
-            let mut test_indices = result_indices.clone();
-            test_indices.push(item.0);
-            test_indices.sort();
-
-            if check_consecutive_runs(&test_indices, actual_consecutive_selections) {
-                result_indices.push(item.0);
-                existing_indices.insert(item.0);
-            }
-        }
-    }
-
     // Sort result by index
-    result_indices.sort();
+    best_result.sort();
 
-    Ok(result_indices)
+    Ok(best_result)
 }
 
 /// A Python module implemented in Rust.
