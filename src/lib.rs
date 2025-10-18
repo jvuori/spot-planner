@@ -206,11 +206,8 @@ fn get_cheapest_periods(
         ));
     }
 
-    if actual_consecutive_selections > min_selections {
-        return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(
-            "calculated consecutive_selections cannot be greater than min_selections",
-        ));
-    }
+    // Note: actual_consecutive_selections can be greater than min_selections
+    // because consecutive_selections is per-block minimum, while min_selections is total minimum
 
     if max_gap_from_start > max_gap_between_periods {
         return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(

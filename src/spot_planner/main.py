@@ -333,10 +333,8 @@ def get_cheapest_periods(
             "min_consecutive_selections cannot be greater than max_consecutive_selections"
         )
 
-    if actual_consecutive_selections > min_selections:
-        raise ValueError(
-            "calculated consecutive_selections cannot be greater than min_selections"
-        )
+    # Note: actual_consecutive_selections can be greater than min_selections
+    # because consecutive_selections is per-block minimum, while min_selections is total minimum
 
     if max_gap_between_periods < 0:
         raise ValueError("max_gap_between_periods must be greater than or equal to 0")
