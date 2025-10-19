@@ -23,6 +23,7 @@ def test_min_selections_is_same_as_for_low_price_threshold():
         low_price_threshold=Decimal("20"),
         min_selections=3,
         min_consecutive_selections=1,
+            max_consecutive_selections=8,
         max_gap_between_periods=3,
         max_gap_from_start=3,
     )
@@ -35,6 +36,7 @@ def test_min_selections_is_greater_than_for_low_price_threshold():
         low_price_threshold=Decimal("10"),
         min_selections=3,
         min_consecutive_selections=1,
+            max_consecutive_selections=8,
         max_gap_between_periods=3,
         max_gap_from_start=3,
     )
@@ -52,6 +54,7 @@ def test_min_selections_is_less_than_for_min_consecutive_selections():
             low_price_threshold=Decimal("10"),
             min_selections=1,
             min_consecutive_selections=3,
+            max_consecutive_selections=8,
             max_gap_between_periods=3,
             max_gap_from_start=3,
         )
@@ -65,6 +68,7 @@ def test_min_selections_is_zero():
             low_price_threshold=Decimal("10"),
             min_selections=0,
             min_consecutive_selections=8,
+            max_consecutive_selections=8,
             max_gap_between_periods=1,
             max_gap_from_start=1,
         )
@@ -79,6 +83,7 @@ def test_max_prices_length():
             low_price_threshold=Decimal("10"),
             min_selections=1,
             min_consecutive_selections=1,
+            max_consecutive_selections=8,
             max_gap_between_periods=5,
             max_gap_from_start=5,
         )
@@ -92,6 +97,7 @@ def test_max_prices_length_exactly_29():
         low_price_threshold=Decimal("5"),
         min_selections=1,
         min_consecutive_selections=1,
+            max_consecutive_selections=8,
         max_gap_between_periods=30,
         max_gap_from_start=30,
     )

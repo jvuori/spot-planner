@@ -514,6 +514,11 @@ def get_cheapest_periods(
     if max_consecutive_selections <= 0:
         raise ValueError("max_consecutive_selections must be greater than 0")
 
+    if min_consecutive_selections > min_selections:
+        raise ValueError(
+            "min_consecutive_selections cannot be greater than min_selections"
+        )
+
     if min_consecutive_selections > max_consecutive_selections:
         raise ValueError(
             "min_consecutive_selections cannot be greater than max_consecutive_selections"

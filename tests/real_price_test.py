@@ -36,6 +36,7 @@ def test_whole_day_cheap():
         low_price_threshold=Decimal("0.7973127490039840637554282614"),
         min_selections=24,
         min_consecutive_selections=1,
+            max_consecutive_selections=8,
         max_gap_between_periods=5,
         max_gap_from_start=5,
     )
@@ -48,6 +49,7 @@ def test_whole_day_cheap_with_low_min_selections():
         low_price_threshold=Decimal("0.7973127490039840637554282614"),
         min_selections=2,
         min_consecutive_selections=1,
+            max_consecutive_selections=8,
         max_gap_between_periods=5,
         max_gap_from_start=5,
     )
@@ -63,6 +65,7 @@ def test_whole_day_desired():
         low_price_threshold=Decimal("-1.0"),
         min_selections=24,
         min_consecutive_selections=1,
+            max_consecutive_selections=8,
         max_gap_between_periods=5,
         max_gap_from_start=5,
     )
@@ -103,6 +106,7 @@ def test_2025_10_07():
         low_price_threshold=Decimal("1.651"),
         min_selections=3,
         min_consecutive_selections=1,
+            max_consecutive_selections=8,
         max_gap_between_periods=8,
         max_gap_from_start=8,
     )
@@ -143,6 +147,7 @@ def test_2025_10_02():
         low_price_threshold=Decimal("8.761"),
         min_selections=5,
         min_consecutive_selections=1,
+            max_consecutive_selections=8,
         max_gap_between_periods=5,
         max_gap_from_start=5,
     )
