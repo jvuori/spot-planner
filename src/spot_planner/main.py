@@ -192,6 +192,7 @@ def _get_cheapest_periods_python(
     min_consecutive_selections: int,
     max_gap_between_periods: int,
     max_gap_from_start: int,
+    aggressive: bool = True,
 ) -> list[int]:
     price_items: tuple[tuple[int, Decimal], ...] = tuple(enumerate(prices))
     cheap_items: tuple[tuple[int, Decimal], ...] = tuple(
@@ -220,6 +221,29 @@ def _get_cheapest_periods_python(
     if len(cheap_items) == len(price_items):
         return list(range(len(price_items)))
 
+    # Choose algorithm based on aggressive parameter
+    if aggressive:
+        # Aggressive mode: minimize average cost (current behavior)
+        return _get_cheapest_periods_aggressive_python(
+            price_items, cheap_items, min_selections, actual_consecutive_selections,
+            max_gap_between_periods, max_gap_from_start
+        )
+    else:
+        # Conservative mode: maximize number of cheap items
+        return _get_cheapest_periods_conservative_python(
+            price_items, cheap_items, min_selections, actual_consecutive_selections,
+            max_gap_between_periods, max_gap_from_start
+        )
+
+
+def _get_cheapest_periods_aggressive_python(
+    price_items: tuple[tuple[int, Decimal], ...],
+    cheap_items: tuple[tuple[int, Decimal], ...],
+    min_selections: int,
+    actual_consecutive_selections: int,
+    max_gap_between_periods: int,
+    max_gap_from_start: int,
+) -> list[int]:
     # Generate all combinations and find the best one after merging with cheap items
     best_result = []
     best_cost = _get_combination_cost(price_items)
@@ -254,7 +278,7 @@ def _get_cheapest_periods_python(
             # Try every combination of consecutive groups (2^n instead of 2^20)
             best_merged_result = result_indices.copy()
             best_merged_cost = _get_combination_cost(
-                [(i, prices[i]) for i in result_indices]
+                [(i, price_items[i][1]) for i in result_indices]
             )
 
             for group_mask in range(1, 2 ** len(cheap_groups)):  # Skip empty selection
@@ -273,7 +297,7 @@ def _get_cheapest_periods_python(
                     merged_indices, actual_consecutive_selections
                 ):
                     # Calculate average cost of this merged result
-                    merged_cost = sum(prices[i] for i in merged_indices)
+                    merged_cost = sum(price_items[i][1] for i in merged_indices)
                     merged_avg_cost = merged_cost / len(merged_indices)
 
                     # Calculate average cost of current best
@@ -310,6 +334,92 @@ def _get_cheapest_periods_python(
     return best_result
 
 
+def _get_cheapest_periods_conservative_python(
+    price_items: tuple[tuple[int, Decimal], ...],
+    cheap_items: tuple[tuple[int, Decimal], ...],
+    min_selections: int,
+    actual_consecutive_selections: int,
+    max_gap_between_periods: int,
+    max_gap_from_start: int,
+) -> list[int]:
+    """Conservative algorithm: maximize number of cheap items while respecting constraints."""
+    # First, try to use as many cheap items as possible
+    best_result = []
+    found = False
+
+    # Try combinations starting from min_selections, prioritizing cheap items
+    for current_count in range(min_selections, len(price_items) + 1):
+        # First try combinations that include as many cheap items as possible
+        cheap_indices = [i for i, _ in cheap_items]
+        
+        # Try all combinations of cheap items first (from most to least)
+        for cheap_count in range(len(cheap_indices), 0, -1):
+            if cheap_count < min_selections:
+                continue
+            
+            for cheap_combination in itertools.combinations(cheap_indices, cheap_count):
+                # Convert to price_item format for validation
+                cheap_price_items = [(i, price_items[i][1]) for i in cheap_combination]
+                
+                if not _is_valid_combination(
+                    cheap_price_items,
+                    actual_consecutive_selections,
+                    max_gap_between_periods,
+                    max_gap_from_start,
+                    len(price_items),
+                ):
+                    continue
+
+                # If we need more items, try to add non-cheap items
+                if cheap_count < current_count:
+                    remaining_needed = current_count - cheap_count
+                    non_cheap_indices = [
+                        i for i in range(len(price_items)) 
+                        if i not in cheap_indices
+                    ]
+
+                    for non_cheap_combination in itertools.combinations(
+                        non_cheap_indices, min(remaining_needed, len(non_cheap_indices))
+                    ):
+                        combined_indices = list(cheap_combination) + list(non_cheap_combination)
+                        combined_indices.sort()
+
+                        # Convert to price_item format for validation
+                        combined_price_items = [(i, price_items[i][1]) for i in combined_indices]
+
+                        if _is_valid_combination(
+                            combined_price_items,
+                            actual_consecutive_selections,
+                            max_gap_between_periods,
+                            max_gap_from_start,
+                            len(price_items),
+                        ):
+                            best_result = combined_indices
+                            found = True
+                            break
+                else:
+                    # We have enough cheap items
+                    best_result = list(cheap_combination)
+                    found = True
+                    break
+                
+                if found:
+                    break
+            
+            if found:
+                break
+        
+        if found:
+            break
+
+    if not found:
+        raise ValueError(
+            f"No valid combination found that satisfies the constraints for {len(price_items)} items"
+        )
+
+    return best_result
+
+
 def get_cheapest_periods(
     prices: Sequence[Decimal],
     low_price_threshold: Decimal,
@@ -318,6 +428,7 @@ def get_cheapest_periods(
     max_consecutive_selections: int,
     max_gap_between_periods: int = 0,
     max_gap_from_start: int = 0,
+    aggressive: bool = True,
 ) -> list[int]:
     """
     Find optimal periods in a price sequence based on cost and timing constraints.
@@ -434,6 +545,7 @@ def get_cheapest_periods(
             max_consecutive_selections,
             max_gap_between_periods,
             max_gap_from_start,
+            aggressive,
         )
     else:
         # Fallback to Python implementation
@@ -444,4 +556,5 @@ def get_cheapest_periods(
             actual_consecutive_selections,
             max_gap_between_periods,
             max_gap_from_start,
+            aggressive,
         )
