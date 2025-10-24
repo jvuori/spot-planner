@@ -159,6 +159,35 @@ fn calculate_dynamic_consecutive_selections(
 }
 
 /// Find the cheapest periods in a sequence of prices
+///
+/// This algorithm selects periods (indices) from a price sequence to minimize cost
+/// while satisfying various timing constraints. The algorithm prioritizes periods
+/// with prices at or below the threshold, but still respects all constraints.
+///
+/// # Parameters
+/// - `prices`: Sequence of prices for each period
+/// - `low_price_threshold`: Price threshold below/equal to which periods are preferentially selected
+/// - `min_selections`: Desired minimum number of periods to select (will be incremented if no valid solution found)
+/// - `min_consecutive_selections`: HARD CONSTRAINT - minimum consecutive periods that must be selected together in each block
+/// - `max_consecutive_selections`: TARGET for dynamic calculation - NOT a maximum limit on consecutive periods
+///   (actual consecutive periods can exceed this value; it's only used to calculate the dynamic minimum)
+/// - `max_gap_between_periods`: Maximum gap allowed between selected periods
+/// - `max_gap_from_start`: Maximum gap from start before first selection
+/// - `aggressive`: Whether to use aggressive (cost-minimizing) or conservative (cheap-item-maximizing) strategy
+///
+/// # Algorithm
+/// 1. Calculate dynamic consecutive requirements based on min/max bounds and heating history
+/// 2. Find cheapest main combination that meets constraints (with adaptive min_selections retry)
+/// 3. Try adding cheap items to that combination, validating each merge
+/// 4. Return the cheapest valid combination of main+cheap items
+///
+/// # Important Notes
+/// - `min_consecutive_selections` is enforced as a minimum for each consecutive block
+/// - `max_consecutive_selections` is NOT a hard limit - consecutive periods can be longer
+/// - The algorithm adaptively increases `min_selections` if no valid solution is found
+///
+/// # Returns
+/// List of indices representing selected periods, sorted by index
 #[pyfunction]
 #[pyo3(signature = (prices, low_price_threshold, min_selections, min_consecutive_selections, max_consecutive_selections, max_gap_between_periods=0, max_gap_from_start=0, aggressive=true))]
 fn get_cheapest_periods(
@@ -221,9 +250,9 @@ fn get_cheapest_periods(
         ));
     }
 
-    if prices.len() > 29 {
+    if prices.len() > 28 {
         return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(
-            "prices cannot contain more than 29 items",
+            "prices cannot contain more than 28 items",
         ));
     }
 
@@ -312,12 +341,19 @@ fn get_cheapest_periods_aggressive(
     max_gap_between_periods: usize,
     max_gap_from_start: usize,
 ) -> PyResult<Vec<usize>> {
-    // Implement the sophisticated Python algorithm with merging logic
-    let mut best_result: Vec<usize> = Vec::new();
-    let mut best_cost = get_combination_cost(price_items);
-    let mut found = false;
+    // CORRECTED ALGORITHM FLOW:
+    // 1. Calculate dynamic consecutive requirements (as-is)
+    // 2. Find cheapest main combination that meets constraints (as-is)
+    // 3. If no valid solution found, increment min_selections by one and retry
+    // 4. Add each combination of cheap items, validate if the result is ok
+    // 5. Return the cheapest valid combination of main+cheap
 
-    // Try combinations starting from min_selections (matching Python logic)
+    // Phase 1: Find cheapest main combination with adaptive min_selections
+    let mut best_main_combination: Vec<usize> = Vec::new();
+    let mut best_main_cost = get_combination_cost(price_items);
+    let mut found_main = false;
+
+    // Adaptive retry: try min_selections, then min_selections+1, etc. until found
     for current_count in min_selections..=price_items.len() {
         for price_item_combination in
             itertools::Itertools::combinations(price_items.iter().cloned(), current_count)
@@ -332,88 +368,83 @@ fn get_cheapest_periods_aggressive(
                 continue;
             }
 
-            // Start with this combination
-            let result_indices: Vec<usize> =
-                price_item_combination.iter().map(|(i, _)| *i).collect();
-            let existing_indices: HashSet<usize> = result_indices.iter().cloned().collect();
-
-            // Try every combination of cheap items that are not already included
-            let available_cheap_items: Vec<(usize, Decimal)> = cheap_items
-                .iter()
-                .filter(|(i, _)| !existing_indices.contains(i))
-                .cloned()
-                .collect();
-
-            // Group cheap items into consecutive runs for efficiency
-            let cheap_groups = group_consecutive_items(&available_cheap_items);
-
-            // Try every combination of consecutive groups (2^n instead of 2^20)
-            let mut best_merged_result = result_indices.clone();
-            let mut best_merged_cost = get_combination_cost(&price_item_combination);
-
-            for group_mask in 1..(1 << cheap_groups.len()) {
-                // Skip empty selection
-                let mut merged_indices = result_indices.clone();
-
-                // Add items from selected groups
-                for (group_idx, group) in cheap_groups.iter().enumerate() {
-                    if group_mask & (1 << group_idx) != 0 {
-                        for (index, _) in group {
-                            merged_indices.push(*index);
-                        }
-                    }
-                }
-
-                merged_indices.sort();
-
-                // Check if merged result maintains valid consecutive runs
-                if check_consecutive_runs(&merged_indices, actual_consecutive_selections) {
-                    // Calculate average cost of this merged result
-                    let merged_cost: Decimal =
-                        merged_indices.iter().map(|&i| price_items[i].1).sum();
-                    let merged_avg_cost = merged_cost / Decimal::from(merged_indices.len());
-
-                    // Calculate average cost of current best
-                    let best_avg_cost = best_merged_cost / Decimal::from(best_merged_result.len());
-
-                    // Keep the result with lowest average cost
-                    if merged_avg_cost < best_avg_cost {
-                        best_merged_result = merged_indices;
-                        best_merged_cost = merged_cost;
-                    }
-                }
-            }
-
-            // Use the best merged result
-            let total_cost = best_merged_cost;
-            let avg_cost = total_cost / Decimal::from(best_merged_result.len());
-
-            // Calculate average cost of current best result
-            let best_avg_cost = best_cost
-                / Decimal::from(if best_result.is_empty() {
-                    1
-                } else {
-                    best_result.len()
-                });
-
-            // Keep the result with lowest average cost
-            if avg_cost < best_avg_cost {
-                best_result = best_merged_result;
-                best_cost = total_cost;
-                found = true;
+            let combination_cost = get_combination_cost(&price_item_combination);
+            if combination_cost < best_main_cost {
+                best_main_combination = price_item_combination.iter().map(|(i, _)| *i).collect();
+                best_main_cost = combination_cost;
+                found_main = true;
             }
         }
 
-        if found {
+        // Break as soon as we find any valid combination
+        if found_main {
             break;
         }
     }
 
-    if !found {
+    if !found_main {
         return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(format!(
-            "No valid combination found that satisfies the constraints for {} items",
+            "No valid main combination found that satisfies the constraints for {} items",
             price_items.len()
         )));
+    }
+
+    // Phase 2: Try adding cheap items one by one to the best main combination
+    let mut best_result = best_main_combination.clone();
+    let mut best_cost = best_main_cost;
+    let existing_indices: HashSet<usize> = best_main_combination.iter().cloned().collect();
+
+    // Get available cheap items (not already in main combination)
+    let available_cheap_items: Vec<(usize, Decimal)> = cheap_items
+        .iter()
+        .filter(|(i, _)| !existing_indices.contains(i))
+        .cloned()
+        .collect();
+
+    // Group cheap items into consecutive runs for efficiency
+    let cheap_groups = group_consecutive_items(&available_cheap_items);
+
+    // Try every combination of consecutive groups (2^n instead of 2^20)
+    for group_mask in 1..(1 << cheap_groups.len()) {
+        let mut merged_indices = best_main_combination.clone();
+
+        // Add items from selected groups
+        for (group_idx, group) in cheap_groups.iter().enumerate() {
+            if group_mask & (1 << group_idx) != 0 {
+                for (index, _) in group {
+                    merged_indices.push(*index);
+                }
+            }
+        }
+
+        merged_indices.sort();
+
+        // Check if merged result maintains valid consecutive runs
+        if check_consecutive_runs(&merged_indices, actual_consecutive_selections) {
+            // Create the merged combination for full validation
+            let merged_combination: Vec<(usize, Decimal)> = merged_indices
+                .iter()
+                .map(|&i| (i, price_items[i].1))
+                .collect();
+
+            // Full validation including all constraints
+            if is_valid_combination(
+                &merged_combination,
+                actual_consecutive_selections,
+                max_gap_between_periods,
+                max_gap_from_start,
+                price_items.len(),
+            ) {
+                // Calculate total cost of this merged result
+                let merged_cost: Decimal = merged_indices.iter().map(|&i| price_items[i].1).sum();
+
+                // Keep the result with lowest total cost
+                if merged_cost < best_cost {
+                    best_result = merged_indices;
+                    best_cost = merged_cost;
+                }
+            }
+        }
     }
 
     // Sort result by index
@@ -431,13 +462,19 @@ fn get_cheapest_periods_conservative(
     max_gap_between_periods: usize,
     max_gap_from_start: usize,
 ) -> PyResult<Vec<usize>> {
-    // Use the same sophisticated algorithm as aggressive, but prioritize cheap items
-    // by trying combinations that include more cheap items first
-    let mut best_result: Vec<usize> = Vec::new();
-    let mut best_cost = get_combination_cost(price_items);
-    let mut found = false;
+    // CORRECTED ALGORITHM FLOW (same as aggressive but with different scoring):
+    // 1. Calculate dynamic consecutive requirements (as-is)
+    // 2. Find cheapest main combination that meets constraints (as-is)
+    // 3. If no valid solution found, increment min_selections by one and retry
+    // 4. Add each combination of cheap items, validate if the result is ok
+    // 5. Return the cheapest valid combination of main+cheap
 
-    // Try combinations starting from min_selections (matching Python logic)
+    // Phase 1: Find cheapest main combination with adaptive min_selections
+    let mut best_main_combination: Vec<usize> = Vec::new();
+    let mut best_main_cost = get_combination_cost(price_items);
+    let mut found_main = false;
+
+    // Adaptive retry: try min_selections, then min_selections+1, etc. until found
     for current_count in min_selections..=price_items.len() {
         for price_item_combination in
             itertools::Itertools::combinations(price_items.iter().cloned(), current_count)
@@ -452,111 +489,96 @@ fn get_cheapest_periods_conservative(
                 continue;
             }
 
-            // Start with this combination
-            let result_indices: Vec<usize> =
-                price_item_combination.iter().map(|(i, _)| *i).collect();
-            let existing_indices: HashSet<usize> = result_indices.iter().cloned().collect();
-
-            // Try every combination of cheap items that are not already included
-            let available_cheap_items: Vec<(usize, Decimal)> = cheap_items
-                .iter()
-                .filter(|(i, _)| !existing_indices.contains(i))
-                .cloned()
-                .collect();
-
-            // Group cheap items into consecutive runs for efficiency
-            let cheap_groups = group_consecutive_items(&available_cheap_items);
-
-            // Try every combination of consecutive groups (2^n instead of 2^20)
-            let mut best_merged_result = result_indices.clone();
-            let mut best_merged_cost = get_combination_cost(&price_item_combination);
-
-            for group_mask in 1..(1 << cheap_groups.len()) {
-                // Skip empty selection
-                let mut merged_indices = result_indices.clone();
-
-                // Add items from selected groups
-                for (group_idx, group) in cheap_groups.iter().enumerate() {
-                    if group_mask & (1 << group_idx) != 0 {
-                        for (index, _) in group {
-                            merged_indices.push(*index);
-                        }
-                    }
-                }
-
-                merged_indices.sort();
-
-                // Check if merged result maintains valid consecutive runs
-                if check_consecutive_runs(&merged_indices, actual_consecutive_selections) {
-                    // Calculate total cost of this merged result
-                    let merged_cost: Decimal =
-                        merged_indices.iter().map(|&i| price_items[i].1).sum();
-
-                    // For conservative mode, prioritize solutions with more cheap items
-                    // Count cheap items in the result
-                    let cheap_count = merged_indices
-                        .iter()
-                        .filter(|&&i| cheap_items.iter().any(|(j, _)| *j == i))
-                        .count();
-
-                    let best_cheap_count = best_merged_result
-                        .iter()
-                        .filter(|&&i| cheap_items.iter().any(|(j, _)| *j == i))
-                        .count();
-
-                    // Prefer solutions with more cheap items, or if equal, lower cost
-                    if cheap_count > best_cheap_count
-                        || (cheap_count == best_cheap_count && merged_cost < best_merged_cost)
-                    {
-                        best_merged_result = merged_indices;
-                        best_merged_cost = merged_cost;
-                    }
-                }
-            }
-
-            // Use the best merged result
-            let total_cost = best_merged_cost;
-            let avg_cost = total_cost / Decimal::from(best_merged_result.len());
-
-            // Calculate average cost of current best result
-            let best_avg_cost = best_cost
-                / Decimal::from(if best_result.is_empty() {
-                    1
-                } else {
-                    best_result.len()
-                });
-
-            // For conservative mode, prioritize solutions with more cheap items
-            let cheap_count = best_merged_result
-                .iter()
-                .filter(|&&i| cheap_items.iter().any(|(j, _)| *j == i))
-                .count();
-
-            let best_cheap_count = best_result
-                .iter()
-                .filter(|&&i| cheap_items.iter().any(|(j, _)| *j == i))
-                .count();
-
-            // Prefer solutions with more cheap items, or if equal, lower average cost
-            if cheap_count > best_cheap_count
-                || (cheap_count == best_cheap_count && avg_cost < best_avg_cost)
-            {
-                best_result = best_merged_result;
-                best_cost = total_cost;
-                found = true;
+            let combination_cost = get_combination_cost(&price_item_combination);
+            if combination_cost < best_main_cost {
+                best_main_combination = price_item_combination.iter().map(|(i, _)| *i).collect();
+                best_main_cost = combination_cost;
+                found_main = true;
             }
         }
 
-        if found {
+        // Break as soon as we find any valid combination
+        if found_main {
             break;
         }
     }
 
-    if !found {
+    if !found_main {
         return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(format!(
-            "No valid combination found that satisfies the constraints for {} items",
+            "No valid main combination found that satisfies the constraints for {} items",
             price_items.len()
         )));
+    }
+
+    // Phase 2: Try adding cheap items one by one to the best main combination
+    let mut best_result = best_main_combination.clone();
+    let mut best_cost = best_main_cost;
+    let existing_indices: HashSet<usize> = best_main_combination.iter().cloned().collect();
+
+    // Get available cheap items (not already in main combination)
+    let available_cheap_items: Vec<(usize, Decimal)> = cheap_items
+        .iter()
+        .filter(|(i, _)| !existing_indices.contains(i))
+        .cloned()
+        .collect();
+
+    // Group cheap items into consecutive runs for efficiency
+    let cheap_groups = group_consecutive_items(&available_cheap_items);
+
+    // Try every combination of consecutive groups (2^n instead of 2^20)
+    for group_mask in 1..(1 << cheap_groups.len()) {
+        let mut merged_indices = best_main_combination.clone();
+
+        // Add items from selected groups
+        for (group_idx, group) in cheap_groups.iter().enumerate() {
+            if group_mask & (1 << group_idx) != 0 {
+                for (index, _) in group {
+                    merged_indices.push(*index);
+                }
+            }
+        }
+
+        merged_indices.sort();
+
+        // Check if merged result maintains valid consecutive runs
+        if check_consecutive_runs(&merged_indices, actual_consecutive_selections) {
+            // Create the merged combination for full validation
+            let merged_combination: Vec<(usize, Decimal)> = merged_indices
+                .iter()
+                .map(|&i| (i, price_items[i].1))
+                .collect();
+
+            // Full validation including all constraints
+            if is_valid_combination(
+                &merged_combination,
+                actual_consecutive_selections,
+                max_gap_between_periods,
+                max_gap_from_start,
+                price_items.len(),
+            ) {
+                // Calculate total cost of this merged result
+                let merged_cost: Decimal = merged_indices.iter().map(|&i| price_items[i].1).sum();
+
+                // For conservative mode, prioritize solutions with more cheap items
+                let cheap_count = merged_indices
+                    .iter()
+                    .filter(|&&i| cheap_items.iter().any(|(j, _)| *j == i))
+                    .count();
+
+                let best_cheap_count = best_result
+                    .iter()
+                    .filter(|&&i| cheap_items.iter().any(|(j, _)| *j == i))
+                    .count();
+
+                // Prefer solutions with more cheap items, or if equal, lower cost
+                if cheap_count > best_cheap_count
+                    || (cheap_count == best_cheap_count && merged_cost < best_cost)
+                {
+                    best_result = merged_indices;
+                    best_cost = merged_cost;
+                }
+            }
+        }
     }
 
     // Sort result by index

@@ -225,14 +225,22 @@ def _get_cheapest_periods_python(
     if aggressive:
         # Aggressive mode: minimize average cost (current behavior)
         return _get_cheapest_periods_aggressive_python(
-            price_items, cheap_items, min_selections, actual_consecutive_selections,
-            max_gap_between_periods, max_gap_from_start
+            price_items,
+            cheap_items,
+            min_selections,
+            actual_consecutive_selections,
+            max_gap_between_periods,
+            max_gap_from_start,
         )
     else:
         # Conservative mode: maximize number of cheap items
         return _get_cheapest_periods_conservative_python(
-            price_items, cheap_items, min_selections, actual_consecutive_selections,
-            max_gap_between_periods, max_gap_from_start
+            price_items,
+            cheap_items,
+            min_selections,
+            actual_consecutive_selections,
+            max_gap_between_periods,
+            max_gap_from_start,
         )
 
 
@@ -351,16 +359,16 @@ def _get_cheapest_periods_conservative_python(
     for current_count in range(min_selections, len(price_items) + 1):
         # First try combinations that include as many cheap items as possible
         cheap_indices = [i for i, _ in cheap_items]
-        
+
         # Try all combinations of cheap items first (from most to least)
         for cheap_count in range(len(cheap_indices), 0, -1):
             if cheap_count < min_selections:
                 continue
-            
+
             for cheap_combination in itertools.combinations(cheap_indices, cheap_count):
                 # Convert to price_item format for validation
                 cheap_price_items = [(i, price_items[i][1]) for i in cheap_combination]
-                
+
                 if not _is_valid_combination(
                     cheap_price_items,
                     actual_consecutive_selections,
@@ -374,18 +382,21 @@ def _get_cheapest_periods_conservative_python(
                 if cheap_count < current_count:
                     remaining_needed = current_count - cheap_count
                     non_cheap_indices = [
-                        i for i in range(len(price_items)) 
-                        if i not in cheap_indices
+                        i for i in range(len(price_items)) if i not in cheap_indices
                     ]
 
                     for non_cheap_combination in itertools.combinations(
                         non_cheap_indices, min(remaining_needed, len(non_cheap_indices))
                     ):
-                        combined_indices = list(cheap_combination) + list(non_cheap_combination)
+                        combined_indices = list(cheap_combination) + list(
+                            non_cheap_combination
+                        )
                         combined_indices.sort()
 
                         # Convert to price_item format for validation
-                        combined_price_items = [(i, price_items[i][1]) for i in combined_indices]
+                        combined_price_items = [
+                            (i, price_items[i][1]) for i in combined_indices
+                        ]
 
                         if _is_valid_combination(
                             combined_price_items,
@@ -402,13 +413,13 @@ def _get_cheapest_periods_conservative_python(
                     best_result = list(cheap_combination)
                     found = True
                     break
-                
+
                 if found:
                     break
-            
+
             if found:
                 break
-        
+
         if found:
             break
 
@@ -435,8 +446,7 @@ def get_cheapest_periods(
 
     This algorithm selects periods (indices) from a price sequence to minimize cost
     while satisfying various timing constraints. The algorithm prioritizes periods
-    with prices at or below the threshold, but still respects all constraints including
-    dynamic consecutive_selections calculation.
+    with prices at or below the threshold, but still respects all constraints.
 
     Args:
         prices: Sequence of prices for each period. Each element represents the
@@ -445,15 +455,16 @@ def get_cheapest_periods(
                            preferentially selected. Periods with price <= threshold
                            will be included if they can form valid consecutive runs
                            meeting the consecutive_selections constraint.
-        min_selections: Minimum number of individual periods (indices) that must be
-                       selected. This also represents historical heating duration
-                       (higher values = more heating in past 24h).
-        min_consecutive_selections: Minimum number of consecutive periods that must be
-                                  selected together. The actual value will be calculated
-                                  dynamically between this and max_consecutive_selections.
-        max_consecutive_selections: Maximum number of consecutive periods that can be
-                                  selected together. The actual value will be calculated
-                                  dynamically between min_consecutive_selections and this.
+        min_selections: Desired minimum number of periods to select. If no valid
+                       combination is found, this will be incremented by 1 until
+                       a valid solution is found.
+        min_consecutive_selections: HARD CONSTRAINT - minimum consecutive periods that
+                                  must be selected together in each block. This is enforced
+                                  as a minimum for every consecutive block.
+        max_consecutive_selections: TARGET for dynamic calculation - NOT a maximum limit.
+                                  Actual consecutive periods can exceed this value. This is
+                                  only used to calculate the dynamic minimum consecutive
+                                  requirement based on heating history and gaps.
         max_gap_between_periods: Maximum number of periods allowed between selected
                                periods. Controls the maximum downtime between operating
                                periods. Set to 0 to require consecutive selections only.
@@ -479,8 +490,13 @@ def get_cheapest_periods(
         [0, 1, 3]  # consecutive_selections calculated dynamically between 2-5
 
     Note:
-        The algorithm prioritizes periods below the price threshold but respects
-        all constraints. The actual consecutive_selections value is calculated dynamically:
+        The algorithm uses adaptive retry logic:
+        1. Calculate dynamic consecutive requirements based on min/max bounds
+        2. Find cheapest main combination that meets constraints
+        3. Try adding cheap items to that combination
+        4. If no valid solution found, increment min_selections and retry
+
+        The actual consecutive_selections value is calculated dynamically:
         - If min_selections < 25% of total prices: use min_consecutive_selections
         - If min_selections > 75% of total prices: use max_consecutive_selections
         - Between 25-75%: linear interpolation between min and max
@@ -499,8 +515,8 @@ def get_cheapest_periods(
     if not prices:
         raise ValueError("prices cannot be empty")
 
-    if len(prices) > 29:
-        raise ValueError("prices cannot contain more than 29 items")
+    if len(prices) > 28:
+        raise ValueError("prices cannot contain more than 28 items")
 
     if min_selections <= 0:
         raise ValueError("min_selections must be greater than 0")
