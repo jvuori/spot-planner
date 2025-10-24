@@ -37,8 +37,8 @@ def test_slow_parameters():
 
     low_price_threshold = Decimal("1.140812749003984063745019920")
     min_selections = 12
-    min_consecutive_selections = 1
-    max_consecutive_selections = 1
+    min_consecutive_periods = 1
+    max_consecutive_periods = 1
     max_gap_between_periods = 4
     max_gap_from_start = 4
     aggressive = False
@@ -47,7 +47,7 @@ def test_slow_parameters():
     print(f"Low price threshold: {low_price_threshold}")
     print(f"Min selections: {min_selections}")
     print(
-        f"Consecutive selections: {min_consecutive_selections}-{max_consecutive_selections}"
+        f"Consecutive selections: {min_consecutive_periods}-{max_consecutive_periods}"
     )
     print(
         f"Gap constraints: max_gap_between_periods={max_gap_between_periods}, max_gap_from_start={max_gap_from_start}"
@@ -66,22 +66,22 @@ def test_slow_parameters():
     print(f"Min selections percentage: {min_selections_percentage:.2f}")
 
     if min_selections_percentage <= 0.25:
-        base_consecutive = min_consecutive_selections
+        base_consecutive = min_consecutive_periods
     elif min_selections_percentage >= 0.75:
-        base_consecutive = max_consecutive_selections
+        base_consecutive = max_consecutive_periods
     else:
         interpolation_factor = (min_selections_percentage - 0.25) / (0.75 - 0.25)
-        base_consecutive = min_consecutive_selections + interpolation_factor * (
-            max_consecutive_selections - min_consecutive_selections
+        base_consecutive = min_consecutive_periods + interpolation_factor * (
+            max_consecutive_periods - min_consecutive_periods
         )
 
     gap_factor = min(max_gap_between_periods / 10.0, 1.0)
     gap_adjustment = gap_factor * (
-        max_consecutive_selections - min_consecutive_selections
+        max_consecutive_periods - min_consecutive_periods
     )
     dynamic_consecutive = base_consecutive + gap_adjustment
     actual_consecutive = max(
-        min_consecutive_selections, min(dynamic_consecutive, max_consecutive_selections)
+        min_consecutive_periods, min(dynamic_consecutive, max_consecutive_periods)
     )
 
     print(f"Calculated actual_consecutive_selections: {actual_consecutive}")
@@ -109,8 +109,8 @@ def test_slow_parameters():
             prices=prices,
             low_price_threshold=low_price_threshold,
             min_selections=min_selections,
-            min_consecutive_selections=min_consecutive_selections,
-            max_consecutive_selections=max_consecutive_selections,
+            min_consecutive_periods=min_consecutive_periods,
+            max_consecutive_periods=max_consecutive_periods,
             max_gap_between_periods=max_gap_between_periods,
             max_gap_from_start=max_gap_from_start,
             aggressive=aggressive,
@@ -133,7 +133,7 @@ def test_slow_parameters():
         print(f"Selected prices: {[float(p) for p in selected_prices]}")
 
         # Verify consecutive requirements
-        # Note: max_consecutive_selections is NOT a hard constraint on maximum consecutive length
+        # Note: max_consecutive_periods is NOT a hard constraint on maximum consecutive length
         # It's only used for dynamic calculation. Actual consecutive periods can be longer.
         if len(result) > 1:
             result_sorted = sorted(result)
@@ -157,8 +157,8 @@ def test_slow_parameters():
             print(f"Min consecutive run: {min_consecutive_found}")
 
             # Only check that minimum consecutive requirement is met
-            assert min_consecutive_found >= min_consecutive_selections, (
-                f"Min consecutive run {min_consecutive_found} is less than min_consecutive_selections {min_consecutive_selections}"
+            assert min_consecutive_found >= min_consecutive_periods, (
+                f"Min consecutive run {min_consecutive_found} is less than min_consecutive_periods {min_consecutive_periods}"
             )
 
         # Check gap constraints

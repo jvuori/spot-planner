@@ -30,8 +30,8 @@ class TestInvalidParameterCombinations:
                 prices=prices,
                 low_price_threshold=Decimal("25"),
                 min_selections=5,  # More than 3 items
-                min_consecutive_selections=1,
-                max_consecutive_selections=8,
+                min_consecutive_periods=1,
+                max_consecutive_periods=8,
                 max_gap_between_periods=1,
                 max_gap_from_start=1,
             )
@@ -45,8 +45,8 @@ class TestInvalidParameterCombinations:
                 prices=prices,
                 low_price_threshold=Decimal("25"),
                 min_selections=0,
-                min_consecutive_selections=1,
-                max_consecutive_selections=8,
+                min_consecutive_periods=1,
+                max_consecutive_periods=8,
                 max_gap_between_periods=1,
                 max_gap_from_start=1,
             )
@@ -60,55 +60,55 @@ class TestInvalidParameterCombinations:
                 prices=prices,
                 low_price_threshold=Decimal("25"),
                 min_selections=-1,
-                min_consecutive_selections=1,
-                max_consecutive_selections=8,
+                min_consecutive_periods=1,
+                max_consecutive_periods=8,
                 max_gap_between_periods=1,
                 max_gap_from_start=1,
             )
 
-    def test_min_consecutive_selections_greater_than_min_selections(self):
-        """Test that min_consecutive_selections > min_selections throws ValueError."""
+    def test_min_consecutive_periods_greater_than_min_selections(self):
+        """Test that min_consecutive_periods > min_selections throws ValueError."""
         prices = [Decimal("10"), Decimal("20"), Decimal("30")]
 
         with pytest.raises(
-            ValueError, match="min_consecutive_selections cannot be greater than min_selections"
+            ValueError, match="min_consecutive_periods cannot be greater than min_selections"
         ):
             get_cheapest_periods(
                 prices=prices,
                 low_price_threshold=Decimal("25"),
                 min_selections=2,
-                min_consecutive_selections=3,  # Greater than min_selections
-                max_consecutive_selections=8,
+                min_consecutive_periods=3,  # Greater than min_selections
+                max_consecutive_periods=8,
                 max_gap_between_periods=1,
                 max_gap_from_start=1,
             )
 
-    def test_min_consecutive_selections_zero(self):
-        """Test that min_consecutive_selections = 0 throws ValueError."""
+    def test_min_consecutive_periods_zero(self):
+        """Test that min_consecutive_periods = 0 throws ValueError."""
         prices = [Decimal("10"), Decimal("20"), Decimal("30")]
 
-        with pytest.raises(ValueError, match="min_consecutive_selections must be greater than 0"):
+        with pytest.raises(ValueError, match="min_consecutive_periods must be greater than 0"):
             get_cheapest_periods(
                 prices=prices,
                 low_price_threshold=Decimal("25"),
                 min_selections=2,
-                min_consecutive_selections=0,
-                max_consecutive_selections=8,
+                min_consecutive_periods=0,
+                max_consecutive_periods=8,
                 max_gap_between_periods=1,
                 max_gap_from_start=1,
             )
 
-    def test_min_consecutive_selections_negative(self):
-        """Test that min_consecutive_selections < 0 throws ValueError."""
+    def test_min_consecutive_periods_negative(self):
+        """Test that min_consecutive_periods < 0 throws ValueError."""
         prices = [Decimal("10"), Decimal("20"), Decimal("30")]
 
-        with pytest.raises(ValueError, match="min_consecutive_selections must be greater than 0"):
+        with pytest.raises(ValueError, match="min_consecutive_periods must be greater than 0"):
             get_cheapest_periods(
                 prices=prices,
                 low_price_threshold=Decimal("25"),
                 min_selections=2,
-                min_consecutive_selections=-1,
-                max_consecutive_selections=8,
+                min_consecutive_periods=-1,
+                max_consecutive_periods=8,
                 max_gap_between_periods=1,
                 max_gap_from_start=1,
             )
@@ -124,8 +124,8 @@ class TestInvalidParameterCombinations:
                 prices=prices,
                 low_price_threshold=Decimal("25"),
                 min_selections=2,
-                min_consecutive_selections=1,
-                max_consecutive_selections=8,
+                min_consecutive_periods=1,
+                max_consecutive_periods=8,
                 max_gap_between_periods=-1,
                 max_gap_from_start=1,
             )
@@ -141,8 +141,8 @@ class TestInvalidParameterCombinations:
                 prices=prices,
                 low_price_threshold=Decimal("25"),
                 min_selections=2,
-                min_consecutive_selections=1,
-                max_consecutive_selections=8,
+                min_consecutive_periods=1,
+                max_consecutive_periods=8,
                 max_gap_between_periods=1,
                 max_gap_from_start=-1,
             )
@@ -158,8 +158,8 @@ class TestInvalidParameterCombinations:
                 prices=prices,
                 low_price_threshold=Decimal("25"),
                 min_selections=2,
-                min_consecutive_selections=1,
-                max_consecutive_selections=8,
+                min_consecutive_periods=1,
+                max_consecutive_periods=8,
                 max_gap_between_periods=1,
                 max_gap_from_start=2,  # Greater than max_gap_between_periods
             )
@@ -171,8 +171,8 @@ class TestInvalidParameterCombinations:
                 prices=[],
                 low_price_threshold=Decimal("25"),
                 min_selections=1,
-                min_consecutive_selections=1,
-                max_consecutive_selections=8,
+                min_consecutive_periods=1,
+                max_consecutive_periods=8,
                 max_gap_between_periods=1,
                 max_gap_from_start=1,
             )
@@ -190,8 +190,8 @@ class TestRealWorldCornerCases:
             prices=prices,
             low_price_threshold=Decimal("20"),
             min_selections=1,
-            min_consecutive_selections=1,
-            max_consecutive_selections=8,
+            min_consecutive_periods=1,
+            max_consecutive_periods=8,
             max_gap_between_periods=0,
             max_gap_from_start=0,
         )
@@ -206,8 +206,8 @@ class TestRealWorldCornerCases:
             prices=prices,
             low_price_threshold=Decimal("20"),
             min_selections=1,
-            min_consecutive_selections=1,
-            max_consecutive_selections=8,
+            min_consecutive_periods=1,
+            max_consecutive_periods=8,
             max_gap_between_periods=0,
             max_gap_from_start=0,
         )
@@ -222,8 +222,8 @@ class TestRealWorldCornerCases:
             prices=prices,
             low_price_threshold=Decimal("25"),
             min_selections=2,
-            min_consecutive_selections=1,
-            max_consecutive_selections=8,
+            min_consecutive_periods=1,
+            max_consecutive_periods=8,
             max_gap_between_periods=1,
             max_gap_from_start=1,
         )
@@ -238,8 +238,8 @@ class TestRealWorldCornerCases:
             prices=prices,
             low_price_threshold=Decimal("20"),
             min_selections=5,
-            min_consecutive_selections=1,
-            max_consecutive_selections=8,
+            min_consecutive_periods=1,
+            max_consecutive_periods=8,
             max_gap_between_periods=2,
             max_gap_from_start=2,
         )
@@ -257,8 +257,8 @@ class TestRealWorldCornerCases:
             prices=prices,
             low_price_threshold=Decimal("40"),
             min_selections=2,
-            min_consecutive_selections=1,
-            max_consecutive_selections=8,
+            min_consecutive_periods=1,
+            max_consecutive_periods=8,
             max_gap_between_periods=1,
             max_gap_from_start=1,
         )
@@ -279,8 +279,8 @@ class TestRealWorldCornerCases:
             prices=prices,
             low_price_threshold=Decimal("10.0003"),
             min_selections=3,
-            min_consecutive_selections=1,
-            max_consecutive_selections=8,
+            min_consecutive_periods=1,
+            max_consecutive_periods=8,
             max_gap_between_periods=1,
             max_gap_from_start=1,
         )
@@ -301,8 +301,8 @@ class TestRealWorldCornerCases:
             prices=prices,
             low_price_threshold=Decimal("0.0"),
             min_selections=3,
-            min_consecutive_selections=1,
-            max_consecutive_selections=8,
+            min_consecutive_periods=1,
+            max_consecutive_periods=8,
             max_gap_between_periods=1,
             max_gap_from_start=1,
         )
@@ -317,8 +317,8 @@ class TestRealWorldCornerCases:
             prices=prices,
             low_price_threshold=Decimal("5"),
             min_selections=2,
-            min_consecutive_selections=1,
-            max_consecutive_selections=8,
+            min_consecutive_periods=1,
+            max_consecutive_periods=8,
             max_gap_between_periods=1,
             max_gap_from_start=1,
         )
@@ -337,8 +337,8 @@ class TestRealWorldCornerCases:
             prices=prices,
             low_price_threshold=Decimal("999999.98"),
             min_selections=2,
-            min_consecutive_selections=1,
-            max_consecutive_selections=8,
+            min_consecutive_periods=1,
+            max_consecutive_periods=8,
             max_gap_between_periods=1,
             max_gap_from_start=1,
         )
@@ -354,8 +354,8 @@ class TestRealWorldCornerCases:
             prices=prices,
             low_price_threshold=Decimal("15"),
             min_selections=5,
-            min_consecutive_selections=1,
-            max_consecutive_selections=8,
+            min_consecutive_periods=1,
+            max_consecutive_periods=8,
             max_gap_between_periods=0,  # No gaps allowed
             max_gap_from_start=0,
         )
@@ -370,24 +370,24 @@ class TestRealWorldCornerCases:
             prices=prices,
             low_price_threshold=Decimal("15"),
             min_selections=3,
-            min_consecutive_selections=1,
-            max_consecutive_selections=8,
+            min_consecutive_periods=1,
+            max_consecutive_periods=8,
             max_gap_between_periods=10,  # Very loose
             max_gap_from_start=10,
         )
         assert len(result) == 10  # All items below threshold
         assert result == list(range(10))
 
-    def test_min_consecutive_selections_equals_min_selections(self):
-        """Test when min_consecutive_selections equals min_selections."""
+    def test_min_consecutive_periods_equals_min_selections(self):
+        """Test when min_consecutive_periods equals min_selections."""
         prices = [Decimal("10"), Decimal("20"), Decimal("30")]
 
         result = get_cheapest_periods(
             prices=prices,
             low_price_threshold=Decimal("25"),
             min_selections=2,
-            min_consecutive_selections=2,  # Same as min_selections
-            max_consecutive_selections=8,
+            min_consecutive_periods=2,  # Same as min_selections
+            max_consecutive_periods=8,
             max_gap_between_periods=1,
             max_gap_from_start=1,
         )
@@ -404,8 +404,8 @@ class TestRealWorldCornerCases:
                 prices=prices,
                 low_price_threshold=Decimal("25"),
                 min_selections=2,
-                min_consecutive_selections=1,
-            max_consecutive_selections=8,
+                min_consecutive_periods=1,
+            max_consecutive_periods=8,
             max_gap_between_periods=0,  # No gaps
                 max_gap_from_start=0,
             )
@@ -418,8 +418,8 @@ class TestRealWorldCornerCases:
             prices=prices,
             low_price_threshold=Decimal("25"),
             min_selections=2,
-            min_consecutive_selections=1,
-            max_consecutive_selections=8,
+            min_consecutive_periods=1,
+            max_consecutive_periods=8,
             max_gap_between_periods=1,
             max_gap_from_start=0,  # Must start from index 0
         )
@@ -435,8 +435,8 @@ class TestRealWorldCornerCases:
             prices=prices,
             low_price_threshold=Decimal("25"),
             min_selections=3,
-            min_consecutive_selections=3,
-            max_consecutive_selections=8,
+            min_consecutive_periods=3,
+            max_consecutive_periods=8,
             max_gap_between_periods=0,  # No gaps allowed
             max_gap_from_start=0,
         )
@@ -454,8 +454,8 @@ class TestBoundaryConditions:
             prices=prices,
             low_price_threshold=Decimal("25"),
             min_selections=3,  # Same as total items
-            min_consecutive_selections=1,
-            max_consecutive_selections=8,
+            min_consecutive_periods=1,
+            max_consecutive_periods=8,
             max_gap_between_periods=1,
             max_gap_from_start=1,
         )
@@ -469,23 +469,23 @@ class TestBoundaryConditions:
             prices=prices,
             low_price_threshold=Decimal("25"),
             min_selections=2,  # Same as cheap items count
-            min_consecutive_selections=1,
-            max_consecutive_selections=8,
+            min_consecutive_periods=1,
+            max_consecutive_periods=8,
             max_gap_between_periods=1,
             max_gap_from_start=1,
         )
         assert len(result) == 3  # Should return all items since all are below threshold
         assert result == [0, 1, 2]
 
-    def test_min_consecutive_selections_equals_one(self):
-        """Test with min_consecutive_selections = 1 (minimum valid value)."""
+    def test_min_consecutive_periods_equals_one(self):
+        """Test with min_consecutive_periods = 1 (minimum valid value)."""
         prices = [Decimal("10"), Decimal("20"), Decimal("30")]
 
         result = get_cheapest_periods(
             prices=prices,
             low_price_threshold=Decimal("25"),
             min_selections=2,
-            min_consecutive_selections=1,  # Minimum valid value
+            min_consecutive_periods=1,  # Minimum valid value
             max_gap_between_periods=1,
             max_gap_from_start=1,
         )
@@ -501,8 +501,8 @@ class TestBoundaryConditions:
                 prices=prices,
                 low_price_threshold=Decimal("25"),
                 min_selections=2,
-                min_consecutive_selections=1,
-            max_consecutive_selections=8,
+                min_consecutive_periods=1,
+            max_consecutive_periods=8,
             max_gap_between_periods=0,  # No gaps
                 max_gap_from_start=0,
             )
@@ -515,8 +515,8 @@ class TestBoundaryConditions:
             prices=prices,
             low_price_threshold=Decimal("25"),
             min_selections=2,
-            min_consecutive_selections=1,
-            max_consecutive_selections=8,
+            min_consecutive_periods=1,
+            max_consecutive_periods=8,
             max_gap_between_periods=1,
             max_gap_from_start=0,  # Must start from 0
         )

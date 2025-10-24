@@ -168,35 +168,35 @@ fn calculate_dynamic_consecutive_selections(
 /// - `prices`: Sequence of prices for each period
 /// - `low_price_threshold`: Price threshold below/equal to which periods are preferentially selected
 /// - `min_selections`: Desired minimum number of periods to select (will be incremented if no valid solution found)
-/// - `min_consecutive_selections`: HARD CONSTRAINT - minimum consecutive periods that must be selected together in each block
-/// - `max_consecutive_selections`: TARGET for dynamic calculation - NOT a maximum limit on consecutive periods
-///   (actual consecutive periods can exceed this value; it's only used to calculate the dynamic minimum)
+/// - `min_consecutive_periods`: HARD CONSTRAINT - minimum consecutive periods always required for effective operation
+/// - `max_consecutive_periods`: Maximum consecutive periods that may be needed (e.g., after long idle time or adverse conditions)
+///   Note: Actual consecutive periods can exceed this value; it's only used for dynamic calculation
 /// - `max_gap_between_periods`: Maximum gap allowed between selected periods
 /// - `max_gap_from_start`: Maximum gap from start before first selection
 /// - `aggressive`: Whether to use aggressive (cost-minimizing) or conservative (cheap-item-maximizing) strategy
 ///
 /// # Algorithm
-/// 1. Calculate dynamic consecutive requirements based on min/max bounds and heating history
+/// 1. Calculate dynamic consecutive requirements based on min/max bounds and operation history
 /// 2. Find cheapest main combination that meets constraints (with adaptive min_selections retry)
 /// 3. Try adding cheap items to that combination, validating each merge
 /// 4. Return the cheapest valid combination of main+cheap items
 ///
 /// # Important Notes
-/// - `min_consecutive_selections` is enforced as a minimum for each consecutive block
-/// - `max_consecutive_selections` is NOT a hard limit - consecutive periods can be longer
+/// - `min_consecutive_periods` is enforced as a minimum for each consecutive block
+/// - `max_consecutive_periods` is NOT a hard limit - consecutive periods can be longer
 /// - The algorithm adaptively increases `min_selections` if no valid solution is found
 ///
 /// # Returns
 /// List of indices representing selected periods, sorted by index
 #[pyfunction]
-#[pyo3(signature = (prices, low_price_threshold, min_selections, min_consecutive_selections, max_consecutive_selections, max_gap_between_periods=0, max_gap_from_start=0, aggressive=true))]
+#[pyo3(signature = (prices, low_price_threshold, min_selections, min_consecutive_periods, max_consecutive_periods, max_gap_between_periods=0, max_gap_from_start=0, aggressive=true))]
 fn get_cheapest_periods(
     _py: Python,
     prices: &Bound<'_, PyList>,
     low_price_threshold: &str,
     min_selections: usize,
-    min_consecutive_selections: usize,
-    max_consecutive_selections: usize,
+    min_consecutive_periods: usize,
+    max_consecutive_periods: usize,
     max_gap_between_periods: usize,
     max_gap_from_start: usize,
     aggressive: bool,
@@ -231,12 +231,12 @@ fn get_cheapest_periods(
     // Calculate dynamic consecutive_selections based on min/max bounds
     let actual_consecutive_selections = if cheap_percentage > 0.8 {
         // If more than 80% of items are cheap, use minimum consecutive requirement
-        min_consecutive_selections
+        min_consecutive_periods
     } else {
         // Otherwise, use the dynamic calculation
         calculate_dynamic_consecutive_selections(
-            min_consecutive_selections,
-            max_consecutive_selections,
+            min_consecutive_periods,
+            max_consecutive_periods,
             min_selections,
             prices.len(),
             max_gap_between_periods,
@@ -268,21 +268,21 @@ fn get_cheapest_periods(
         ));
     }
 
-    if min_consecutive_selections == 0 {
+    if min_consecutive_periods == 0 {
         return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(
-            "min_consecutive_selections must be greater than 0",
+            "min_consecutive_periods must be greater than 0",
         ));
     }
 
-    if max_consecutive_selections == 0 {
+    if max_consecutive_periods == 0 {
         return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(
-            "max_consecutive_selections must be greater than 0",
+            "max_consecutive_periods must be greater than 0",
         ));
     }
 
-    if min_consecutive_selections > max_consecutive_selections {
+    if min_consecutive_periods > max_consecutive_periods {
         return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(
-            "min_consecutive_selections cannot be greater than max_consecutive_selections",
+            "min_consecutive_periods cannot be greater than max_consecutive_periods",
         ));
     }
 

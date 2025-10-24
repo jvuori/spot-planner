@@ -22,8 +22,8 @@ def test_min_selections_is_same_as_for_low_price_threshold():
         prices=PRICE_DATA,
         low_price_threshold=Decimal("20"),
         min_selections=3,
-        min_consecutive_selections=1,
-        max_consecutive_selections=8,
+        min_consecutive_periods=1,
+        max_consecutive_periods=8,
         max_gap_between_periods=3,
         max_gap_from_start=3,
     )
@@ -36,8 +36,8 @@ def test_min_selections_is_greater_than_for_low_price_threshold():
         prices=PRICE_DATA,
         low_price_threshold=Decimal("10"),
         min_selections=3,
-        min_consecutive_selections=1,
-        max_consecutive_selections=8,
+        min_consecutive_periods=1,
+        max_consecutive_periods=8,
         max_gap_between_periods=3,
         max_gap_from_start=3,
     )
@@ -45,18 +45,18 @@ def test_min_selections_is_greater_than_for_low_price_threshold():
     assert periods == [2, 3, 4, 5]
 
 
-def test_min_selections_is_less_than_for_min_consecutive_selections():
-    # This should now raise an error since min_consecutive_selections > min_selections
+def test_min_selections_is_less_than_for_min_consecutive_periods():
+    # This should now raise an error since min_consecutive_periods > min_selections
     with pytest.raises(
         ValueError,
-        match="min_consecutive_selections cannot be greater than min_selections",
+        match="min_consecutive_periods cannot be greater than min_selections",
     ):
         get_cheapest_periods(
             prices=PRICE_DATA,
             low_price_threshold=Decimal("10"),
             min_selections=1,
-            min_consecutive_selections=3,
-            max_consecutive_selections=8,
+            min_consecutive_periods=3,
+            max_consecutive_periods=8,
             max_gap_between_periods=3,
             max_gap_from_start=3,
         )
@@ -69,8 +69,8 @@ def test_min_selections_is_zero():
             prices=PRICE_DATA,
             low_price_threshold=Decimal("10"),
             min_selections=0,
-            min_consecutive_selections=8,
-            max_consecutive_selections=8,
+            min_consecutive_periods=8,
+            max_consecutive_periods=8,
             max_gap_between_periods=1,
             max_gap_from_start=1,
         )
@@ -84,8 +84,8 @@ def test_max_prices_length():
             prices=prices_29,
             low_price_threshold=Decimal("10"),
             min_selections=1,
-            min_consecutive_selections=1,
-            max_consecutive_selections=8,
+            min_consecutive_periods=1,
+            max_consecutive_periods=8,
             max_gap_between_periods=5,
             max_gap_from_start=5,
         )
@@ -98,8 +98,8 @@ def test_max_prices_length_exactly_28():
         prices=prices_28,
         low_price_threshold=Decimal("5"),
         min_selections=1,
-        min_consecutive_selections=1,
-        max_consecutive_selections=8,
+        min_consecutive_periods=1,
+        max_consecutive_periods=8,
         max_gap_between_periods=30,
         max_gap_from_start=30,
     )
@@ -109,7 +109,7 @@ def test_max_prices_length_exactly_28():
 
 
 @pytest.mark.parametrize(
-    "indices, min_consecutive_selections, expected",
+    "indices, min_consecutive_periods, expected",
     [
         ([], 1, False),
         ([0], 1, True),
@@ -128,10 +128,10 @@ def test_max_prices_length_exactly_28():
         ([2, 3, 4, 6, 7, 8], 3, True),
     ],
 )
-def test_is_valid_min_consecutive_selections(
-    indices: list[int], min_consecutive_selections: int, expected: bool
+def test_is_valid_min_consecutive_periods(
+    indices: list[int], min_consecutive_periods: int, expected: bool
 ):
-    # Test min_consecutive_selections validation by setting other constraints to be permissive
+    # Test min_consecutive_periods validation by setting other constraints to be permissive
     combination = tuple([(index, Decimal("47")) for index in indices])
     max_gap_between_periods = 100  # Very permissive
     max_gap_from_start = 100  # Very permissive
@@ -140,7 +140,7 @@ def test_is_valid_min_consecutive_selections(
     assert (
         _is_valid_combination(
             combination,
-            min_consecutive_selections,
+            min_consecutive_periods,
             max_gap_between_periods,
             max_gap_from_start,
             full_length,
@@ -177,13 +177,13 @@ def test_is_valid_max_gap_between_periods(
 ):
     # Test max_gap_between_periods validation by setting other constraints to be permissive
     combination = tuple([(index, Decimal("47")) for index in indices])
-    min_consecutive_selections = 1  # Very permissive
+    min_consecutive_periods = 1  # Very permissive
     max_gap_from_start = 100  # Very permissive
 
     assert (
         _is_valid_combination(
             combination,
-            min_consecutive_selections,
+            min_consecutive_periods,
             max_gap_between_periods,
             max_gap_from_start,
             full_length,
@@ -207,14 +207,14 @@ def test_is_valid_max_gap_from_start(
 ):
     # Test max_gap_from_start validation by setting other constraints to be permissive
     combination = tuple([(index, Decimal("47")) for index in indices])
-    min_consecutive_selections = 1  # Very permissive
+    min_consecutive_periods = 1  # Very permissive
     max_gap_between_periods = 100  # Very permissive
     full_length = max(indices) + 10 if indices else 10  # Large enough
 
     assert (
         _is_valid_combination(
             combination,
-            min_consecutive_selections,
+            min_consecutive_periods,
             max_gap_between_periods,
             max_gap_from_start,
             full_length,

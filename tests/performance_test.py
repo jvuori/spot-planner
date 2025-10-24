@@ -11,8 +11,8 @@ def test_performance():
         prices=prices,
         low_price_threshold=Decimal("10"),
         min_selections=12,
-        min_consecutive_selections=1,
-        max_consecutive_selections=8,
+        min_consecutive_periods=1,
+        max_consecutive_periods=8,
         max_gap_between_periods=1,
         max_gap_from_start=1,
     )
@@ -25,8 +25,8 @@ def test_maximum_range():
         prices=prices,
         low_price_threshold=Decimal("10"),
         min_selections=12,
-        min_consecutive_selections=1,
-        max_consecutive_selections=8,
+        min_consecutive_periods=1,
+        max_consecutive_periods=8,
         max_gap_between_periods=1,
         max_gap_from_start=1,
     )
