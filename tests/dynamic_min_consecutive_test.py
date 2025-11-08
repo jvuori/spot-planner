@@ -7,7 +7,6 @@ from decimal import Decimal
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
 from spot_planner.main import (
-    calculate_dynamic_consecutive_selections,
     get_cheapest_periods,
 )
 
@@ -24,178 +23,22 @@ PRICE_DATA = [
 ]
 
 
-class TestCalculateDynamicConsecutiveSelections(unittest.TestCase):
-    """Test the dynamic calculation of consecutive_selections."""
+class TestGetCheapestPeriods(unittest.TestCase):
+    """Test get_cheapest_periods with min_consecutive_periods."""
 
-    def test_low_percentage_uses_min(self):
-        """Test that low percentage uses min_consecutive_periods."""
-        result = calculate_dynamic_consecutive_selections(
-            min_consecutive_periods=2,
-            max_consecutive_periods=5,
-            min_selections=2,  # 20% of 10 prices
-            total_prices=10,
-            max_gap_between_periods=3,
-        )
-        # 20% < 25%, should use min_consecutive_periods = 2
-        assert result == 2
-
-    def test_high_percentage_uses_max(self):
-        """Test that high percentage uses max_consecutive_periods."""
-        result = calculate_dynamic_consecutive_selections(
-            min_consecutive_periods=2,
-            max_consecutive_periods=5,
-            min_selections=8,  # 80% of 10 prices
-            total_prices=10,
-            max_gap_between_periods=3,
-        )
-        # 80% > 75%, should use max_consecutive_periods = 5
-        assert result == 5
-
-    def test_medium_percentage_interpolates(self):
-        """Test that medium percentage interpolates between min and max."""
-        result = calculate_dynamic_consecutive_selections(
-            min_consecutive_periods=2,
-            max_consecutive_periods=5,
-            min_selections=5,  # 50% of 10 prices
-            total_prices=10,
-            max_gap_between_periods=3,
-        )
-        # 50% between 25-75%, should interpolate: 2 + 0.5*(5-2) = 3.5 -> 3
-        assert result == 3
-
-    def test_gap_adjustment_increases_value(self):
-        """Test that larger gaps push toward max_consecutive_periods."""
-        result = calculate_dynamic_consecutive_selections(
-            min_consecutive_periods=2,
-            max_consecutive_periods=5,
-            min_selections=3,  # 30% of 10 prices
-            total_prices=10,
-            max_gap_between_periods=8,  # Large gap
-        )
-        # Base: 2 (30% < 25%), gap adjustment: 8/10 * (5-2) = 2.4 -> 2
-        # Result should be 2 + 2 = 4
-        assert result == 4
-
-    def test_respects_bounds(self):
-        """Test that result is always within min and max bounds."""
-        result = calculate_dynamic_consecutive_selections(
-            min_consecutive_periods=2,
-            max_consecutive_periods=5,
-            min_selections=1,  # Very low percentage
-            total_prices=10,
-            max_gap_between_periods=20,  # Very large gap
-        )
-        # Should be capped at max_consecutive_periods = 5
-        assert result == 5
-
-    def test_exact_25_percent_boundary(self):
-        """Test exact 25% boundary."""
-        result = calculate_dynamic_consecutive_selections(
-            min_consecutive_periods=2,
-            max_consecutive_periods=5,
-            min_selections=2,  # Exactly 20% of 10 prices
-            total_prices=10,
-            max_gap_between_periods=3,
-        )
-        # Exactly 20% < 25%, should use min_consecutive_periods = 2
-        assert result == 2
-
-    def test_exact_75_percent_boundary(self):
-        """Test exact 75% boundary."""
-        result = calculate_dynamic_consecutive_selections(
-            min_consecutive_periods=2,
-            max_consecutive_periods=5,
-            min_selections=8,  # Exactly 80% of 10 prices
-            total_prices=10,
-            max_gap_between_periods=3,
-        )
-        # Exactly 80% > 75%, should use max_consecutive_periods = 5
-        assert result == 5
-
-
-class TestGetCheapestPeriodsWithDynamicCalculation(unittest.TestCase):
-    """Test get_cheapest_periods with dynamic consecutive_selections calculation."""
-
-    def test_low_percentage_scenario(self):
-        """Test low percentage scenario uses min_consecutive_periods."""
+    def test_basic_functionality(self):
+        """Test basic functionality with min_consecutive_periods."""
         periods = get_cheapest_periods(
             prices=PRICE_DATA,
             low_price_threshold=Decimal("25"),
-            min_selections=2,  # 22% of 9 prices - low percentage
+            min_selections=2,
             min_consecutive_periods=2,
-            max_consecutive_periods=5,
             max_gap_between_periods=2,
             max_gap_from_start=2,
         )
-        # Should calculate consecutive_selections = 2 (low percentage)
         # With threshold 25, cheap items are [2, 3, 4, 5] (indices 2,3,4,5)
         # Need at least 2 consecutive
         assert len(periods) >= 2
-
-    def test_high_percentage_scenario(self):
-        """Test high percentage scenario uses max_consecutive_periods."""
-        periods = get_cheapest_periods(
-            prices=PRICE_DATA,
-            low_price_threshold=Decimal("25"),
-            min_selections=7,  # 78% of 9 prices - high percentage
-            min_consecutive_periods=2,
-            max_consecutive_periods=5,
-            max_gap_between_periods=2,
-            max_gap_from_start=2,
-        )
-        # Should calculate consecutive_selections = 5 (high percentage)
-        # With threshold 25, cheap items are [2, 3, 4, 5] (indices 2,3,4,5)
-        # Need at least 5 consecutive
-        assert len(periods) >= 5
-
-    def test_medium_percentage_scenario(self):
-        """Test medium percentage scenario interpolates."""
-        periods = get_cheapest_periods(
-            prices=PRICE_DATA,
-            low_price_threshold=Decimal("25"),
-            min_selections=4,  # 44% of 9 prices - medium percentage
-            min_consecutive_periods=2,
-            max_consecutive_periods=5,
-            max_gap_between_periods=2,
-            max_gap_from_start=2,
-        )
-        # Should calculate consecutive_selections = 3 (interpolated)
-        # With threshold 25, cheap items are [2, 3, 4, 5] (indices 2,3,4,5)
-        # Need at least 3 consecutive
-        assert len(periods) >= 3
-
-    def test_gap_adjustment_scenario(self):
-        """Test that gap adjustment increases consecutive_selections."""
-        periods = get_cheapest_periods(
-            prices=PRICE_DATA,
-            low_price_threshold=Decimal("25"),
-            min_selections=6,  # 67% of 9 prices - higher to accommodate gap adjustment
-            min_consecutive_periods=2,
-            max_consecutive_periods=5,
-            max_gap_between_periods=8,  # Large gap
-            max_gap_from_start=2,
-        )
-        # Should calculate consecutive_selections = 2 + gap_adjustment
-        # With threshold 25, cheap items are [2, 3, 4, 5] (indices 2,3,4,5)
-        assert len(periods) >= 2
-
-    def test_parameter_validation(self):
-        """Test that parameter validation works correctly."""
-        # Test min > max error
-        with self.assertRaises(ValueError) as context:
-            get_cheapest_periods(
-                prices=PRICE_DATA,
-                low_price_threshold=Decimal("25"),
-                min_selections=3,
-                min_consecutive_periods=5,  # min > max
-                max_consecutive_periods=3,
-                max_gap_between_periods=2,
-                max_gap_from_start=2,
-            )
-        self.assertIn(
-            "min_consecutive_periods cannot be greater than max_consecutive_periods",
-            str(context.exception),
-        )
 
     def test_mandatory_parameters(self):
         """Test that all parameters are now mandatory."""
@@ -205,20 +48,18 @@ class TestGetCheapestPeriodsWithDynamicCalculation(unittest.TestCase):
             low_price_threshold=Decimal("25"),
             min_selections=3,
             min_consecutive_periods=2,
-            max_consecutive_periods=4,
             max_gap_between_periods=2,
             max_gap_from_start=2,
         )
         assert len(periods) >= 2
 
-    def test_min_max_both_one_cheapest_selection(self):
-        """Test that when min and max are both 1, algorithm picks cheapest regardless of consecutive."""
+    def test_min_consecutive_one(self):
+        """Test that when min_consecutive_periods is 1, algorithm picks cheapest."""
         periods = get_cheapest_periods(
             prices=PRICE_DATA,
             low_price_threshold=Decimal("25"),
             min_selections=3,
-            min_consecutive_periods=1,  # Min is 1
-            max_consecutive_periods=1,  # Max is 1 - forces cheapest selection
+            min_consecutive_periods=1,
             max_gap_between_periods=2,
             max_gap_from_start=2,
         )
@@ -228,14 +69,6 @@ class TestGetCheapestPeriodsWithDynamicCalculation(unittest.TestCase):
         # With threshold 25, the cheap items are [3, 4, 5] (indices 3,4,5 with prices 20,10,20)
         # The algorithm may include additional periods if they form valid combinations
         # and are still cost-effective
-
-        # Verify that all selected periods are either cheap or part of a valid combination
-        selected_prices = [float(PRICE_DATA[i]) for i in periods]
-        cheap_indices = {3, 4, 5}  # Indices with price <= 25
-
-        # The algorithm should select the cheapest valid combination and add cheap items
-        # With min=max=1, it should pick the 3 cheapest overall items, then add cheap items
-        assert len(periods) >= 3  # Should select at least 3 items
 
         # Verify the cheapest items are included
         assert 4 in periods  # Index 4 has the lowest price (10.0)
@@ -247,8 +80,8 @@ class TestGetCheapestPeriodsWithDynamicCalculation(unittest.TestCase):
         selected_prices = [float(PRICE_DATA[i]) for i in periods]
         print(f"Selected: {periods}, prices: {selected_prices}")
 
-    def test_min_max_both_one_exact_selection(self):
-        """Test that when min and max are both 1, algorithm picks exactly the cheapest when forced."""
+    def test_min_consecutive_one_exact_selection(self):
+        """Test that when min_consecutive_periods is 1, algorithm picks exactly the cheapest when forced."""
         # Use a higher threshold to force selection of exactly min_selections
         periods = get_cheapest_periods(
             prices=PRICE_DATA,
@@ -256,8 +89,7 @@ class TestGetCheapestPeriodsWithDynamicCalculation(unittest.TestCase):
                 "15"
             ),  # Very low threshold - only index 4 qualifies
             min_selections=3,
-            min_consecutive_periods=1,  # Min is 1
-            max_consecutive_periods=1,  # Max is 1 - forces cheapest selection
+            min_consecutive_periods=1,
             max_gap_between_periods=2,
             max_gap_from_start=2,
         )

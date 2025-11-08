@@ -29,7 +29,7 @@ fn group_consecutive_items(items: &[(usize, Decimal)]) -> Vec<Vec<(usize, Decima
 }
 
 /// Check if indices have valid consecutive runs (matches Python _check_consecutive_runs)
-fn check_consecutive_runs(indices: &[usize], min_consecutive_selections: usize) -> bool {
+fn check_consecutive_runs(indices: &[usize], min_consecutive_periods: usize) -> bool {
     if indices.is_empty() {
         return false;
     }
@@ -39,7 +39,7 @@ fn check_consecutive_runs(indices: &[usize], min_consecutive_selections: usize) 
         if indices[i] == indices[i - 1] + 1 {
             current_run_length += 1;
         } else {
-            if current_run_length < min_consecutive_selections {
+            if current_run_length < min_consecutive_periods {
                 return false;
             }
             current_run_length = 1;
@@ -47,13 +47,13 @@ fn check_consecutive_runs(indices: &[usize], min_consecutive_selections: usize) 
     }
 
     // Check the last run
-    current_run_length >= min_consecutive_selections
+    current_run_length >= min_consecutive_periods
 }
 
 /// Check if a combination of price items is valid according to the constraints
 fn is_valid_combination(
     combination: &[(usize, Decimal)],
-    min_consecutive_selections: usize,
+    min_consecutive_periods: usize,
     max_gap_between_periods: usize,
     max_gap_from_start: usize,
     full_length: usize,
@@ -93,15 +93,15 @@ fn is_valid_combination(
         if indices[i] == indices[i - 1] + 1 {
             block_length += 1;
         } else {
-            if block_length < min_consecutive_selections {
+            if block_length < min_consecutive_periods {
                 return false;
             }
             block_length = 1;
         }
     }
 
-    // Check last block min_consecutive_selections
-    if block_length < min_consecutive_selections {
+    // Check last block min_consecutive_periods
+    if block_length < min_consecutive_periods {
         return false;
     }
 
@@ -111,51 +111,6 @@ fn is_valid_combination(
 /// Calculate the total cost of a combination
 fn get_combination_cost(combination: &[(usize, Decimal)]) -> Decimal {
     combination.iter().map(|(_, price)| *price).sum()
-}
-
-/// Calculate dynamic consecutive_selections based on heating requirements
-fn calculate_dynamic_consecutive_selections(
-    min_consecutive_selections: usize,
-    max_consecutive_selections: usize,
-    min_selections: usize,
-    total_prices: usize,
-    max_gap_between_periods: usize,
-) -> usize {
-    // Calculate percentage of min_selections relative to total prices
-    let min_selections_percentage = min_selections as f64 / total_prices as f64;
-
-    // Base calculation based on percentage rules:
-    // - < 25% of total prices: use min_consecutive_selections
-    // - > 75% of total prices: use max_consecutive_selections
-    // - Between 25-75%: linear interpolation
-    let base_consecutive = if min_selections_percentage <= 0.25 {
-        min_consecutive_selections
-    } else if min_selections_percentage >= 0.75 {
-        max_consecutive_selections
-    } else {
-        // Linear interpolation between 25% and 75%
-        // Map 0.25-0.75 to 0.0-1.0 for interpolation
-        let interpolation_factor = (min_selections_percentage - 0.25) / (0.75 - 0.25);
-        min_consecutive_selections
-            + (interpolation_factor
-                * (max_consecutive_selections - min_consecutive_selections) as f64)
-                as usize
-    };
-
-    // Adjust based on gap between periods
-    // Larger gaps mean more consecutive heating needed
-    // Scale gap adjustment: larger gaps push toward max_consecutive_selections
-    let gap_factor = (max_gap_between_periods as f64 / 10.0).min(1.0); // Normalize gap to 0-1
-    let gap_adjustment =
-        (gap_factor * (max_consecutive_selections - min_consecutive_selections) as f64) as usize;
-
-    // Final calculation: base + gap adjustment
-    let dynamic_consecutive = base_consecutive + gap_adjustment;
-
-    // Ensure result is within bounds
-    dynamic_consecutive
-        .max(min_consecutive_selections)
-        .min(max_consecutive_selections)
 }
 
 /// Find the cheapest periods in a sequence of prices
@@ -168,35 +123,30 @@ fn calculate_dynamic_consecutive_selections(
 /// - `prices`: Sequence of prices for each period
 /// - `low_price_threshold`: Price threshold below/equal to which periods are preferentially selected
 /// - `min_selections`: Desired minimum number of periods to select (will be incremented if no valid solution found)
-/// - `min_consecutive_periods`: HARD CONSTRAINT - minimum consecutive periods always required for effective operation
-/// - `max_consecutive_periods`: Maximum consecutive periods that may be needed (e.g., after long idle time or adverse conditions)
-///   Note: Actual consecutive periods can exceed this value; it's only used for dynamic calculation
+/// - `min_consecutive_periods`: Minimum consecutive periods required for each consecutive block
 /// - `max_gap_between_periods`: Maximum gap allowed between selected periods
 /// - `max_gap_from_start`: Maximum gap from start before first selection
 /// - `aggressive`: Whether to use aggressive (cost-minimizing) or conservative (cheap-item-maximizing) strategy
 ///
 /// # Algorithm
-/// 1. Calculate dynamic consecutive requirements based on min/max bounds and operation history
-/// 2. Find cheapest main combination that meets constraints (with adaptive min_selections retry)
-/// 3. Try adding cheap items to that combination, validating each merge
-/// 4. Return the cheapest valid combination of main+cheap items
+/// 1. Find cheapest main combination that meets constraints (with adaptive min_selections retry)
+/// 2. Try adding cheap items to that combination, validating each merge
+/// 3. Return the cheapest valid combination of main+cheap items
 ///
 /// # Important Notes
 /// - `min_consecutive_periods` is enforced as a minimum for each consecutive block
-/// - `max_consecutive_periods` is NOT a hard limit - consecutive periods can be longer
 /// - The algorithm adaptively increases `min_selections` if no valid solution is found
 ///
 /// # Returns
 /// List of indices representing selected periods, sorted by index
 #[pyfunction]
-#[pyo3(signature = (prices, low_price_threshold, min_selections, min_consecutive_periods, max_consecutive_periods, max_gap_between_periods=0, max_gap_from_start=0, aggressive=true))]
+#[pyo3(signature = (prices, low_price_threshold, min_selections, min_consecutive_periods, max_gap_between_periods=0, max_gap_from_start=0, aggressive=true))]
 fn get_cheapest_periods(
     _py: Python,
     prices: &Bound<'_, PyList>,
     low_price_threshold: &str,
     min_selections: usize,
     min_consecutive_periods: usize,
-    max_consecutive_periods: usize,
     max_gap_between_periods: usize,
     max_gap_from_start: usize,
     aggressive: bool,
@@ -223,25 +173,6 @@ fn get_cheapest_periods(
         .filter(|(_, price)| *price <= low_price_threshold)
         .cloned()
         .collect();
-
-    // If we have mostly cheap items, be more permissive with consecutive requirements
-    let cheap_items_count = cheap_items.len();
-    let cheap_percentage = cheap_items_count as f64 / prices.len() as f64;
-
-    // Calculate dynamic consecutive_selections based on min/max bounds
-    let actual_consecutive_selections = if cheap_percentage > 0.8 {
-        // If more than 80% of items are cheap, use minimum consecutive requirement
-        min_consecutive_periods
-    } else {
-        // Otherwise, use the dynamic calculation
-        calculate_dynamic_consecutive_selections(
-            min_consecutive_periods,
-            max_consecutive_periods,
-            min_selections,
-            prices.len(),
-            max_gap_between_periods,
-        )
-    };
 
     // Validate input parameters
     if prices.is_empty() {
@@ -274,21 +205,6 @@ fn get_cheapest_periods(
         ));
     }
 
-    if max_consecutive_periods == 0 {
-        return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(
-            "max_consecutive_periods must be greater than 0",
-        ));
-    }
-
-    if min_consecutive_periods > max_consecutive_periods {
-        return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(
-            "min_consecutive_periods cannot be greater than max_consecutive_periods",
-        ));
-    }
-
-    // Note: actual_consecutive_selections can be greater than min_selections
-    // because consecutive_selections is per-block minimum, while min_selections is total minimum
-
     if max_gap_from_start > max_gap_between_periods {
         return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(
             "max_gap_from_start must be less than or equal to max_gap_between_periods",
@@ -315,7 +231,7 @@ fn get_cheapest_periods(
             &price_items,
             &cheap_items,
             min_selections,
-            actual_consecutive_selections,
+            min_consecutive_periods,
             max_gap_between_periods,
             max_gap_from_start,
         )
@@ -325,7 +241,7 @@ fn get_cheapest_periods(
             &price_items,
             &cheap_items,
             min_selections,
-            actual_consecutive_selections,
+            min_consecutive_periods,
             max_gap_between_periods,
             max_gap_from_start,
         )
@@ -337,16 +253,15 @@ fn get_cheapest_periods_aggressive(
     price_items: &[(usize, Decimal)],
     cheap_items: &[(usize, Decimal)],
     min_selections: usize,
-    actual_consecutive_selections: usize,
+    min_consecutive_periods: usize,
     max_gap_between_periods: usize,
     max_gap_from_start: usize,
 ) -> PyResult<Vec<usize>> {
-    // CORRECTED ALGORITHM FLOW:
-    // 1. Calculate dynamic consecutive requirements (as-is)
-    // 2. Find cheapest main combination that meets constraints (as-is)
-    // 3. If no valid solution found, increment min_selections by one and retry
-    // 4. Add each combination of cheap items, validate if the result is ok
-    // 5. Return the cheapest valid combination of main+cheap
+    // ALGORITHM FLOW:
+    // 1. Find cheapest main combination that meets constraints
+    // 2. If no valid solution found, increment min_selections by one and retry
+    // 3. Add each combination of cheap items, validate if the result is ok
+    // 4. Return the cheapest valid combination of main+cheap
 
     // Phase 1: Find cheapest main combination with adaptive min_selections
     let mut best_main_combination: Vec<usize> = Vec::new();
@@ -360,7 +275,7 @@ fn get_cheapest_periods_aggressive(
         {
             if !is_valid_combination(
                 &price_item_combination,
-                actual_consecutive_selections,
+                min_consecutive_periods,
                 max_gap_between_periods,
                 max_gap_from_start,
                 price_items.len(),
@@ -420,7 +335,7 @@ fn get_cheapest_periods_aggressive(
         merged_indices.sort();
 
         // Check if merged result maintains valid consecutive runs
-        if check_consecutive_runs(&merged_indices, actual_consecutive_selections) {
+        if check_consecutive_runs(&merged_indices, min_consecutive_periods) {
             // Create the merged combination for full validation
             let merged_combination: Vec<(usize, Decimal)> = merged_indices
                 .iter()
@@ -430,7 +345,7 @@ fn get_cheapest_periods_aggressive(
             // Full validation including all constraints
             if is_valid_combination(
                 &merged_combination,
-                actual_consecutive_selections,
+                min_consecutive_periods,
                 max_gap_between_periods,
                 max_gap_from_start,
                 price_items.len(),
@@ -458,16 +373,15 @@ fn get_cheapest_periods_conservative(
     price_items: &[(usize, Decimal)],
     cheap_items: &[(usize, Decimal)],
     min_selections: usize,
-    actual_consecutive_selections: usize,
+    min_consecutive_periods: usize,
     max_gap_between_periods: usize,
     max_gap_from_start: usize,
 ) -> PyResult<Vec<usize>> {
-    // CORRECTED ALGORITHM FLOW (same as aggressive but with different scoring):
-    // 1. Calculate dynamic consecutive requirements (as-is)
-    // 2. Find cheapest main combination that meets constraints (as-is)
-    // 3. If no valid solution found, increment min_selections by one and retry
-    // 4. Add each combination of cheap items, validate if the result is ok
-    // 5. Return the cheapest valid combination of main+cheap
+    // ALGORITHM FLOW (same as aggressive but with different scoring):
+    // 1. Find cheapest main combination that meets constraints
+    // 2. If no valid solution found, increment min_selections by one and retry
+    // 3. Add each combination of cheap items, validate if the result is ok
+    // 4. Return the cheapest valid combination of main+cheap
 
     // Phase 1: Find cheapest main combination with adaptive min_selections
     let mut best_main_combination: Vec<usize> = Vec::new();
@@ -481,7 +395,7 @@ fn get_cheapest_periods_conservative(
         {
             if !is_valid_combination(
                 &price_item_combination,
-                actual_consecutive_selections,
+                min_consecutive_periods,
                 max_gap_between_periods,
                 max_gap_from_start,
                 price_items.len(),
@@ -541,7 +455,7 @@ fn get_cheapest_periods_conservative(
         merged_indices.sort();
 
         // Check if merged result maintains valid consecutive runs
-        if check_consecutive_runs(&merged_indices, actual_consecutive_selections) {
+        if check_consecutive_runs(&merged_indices, min_consecutive_periods) {
             // Create the merged combination for full validation
             let merged_combination: Vec<(usize, Decimal)> = merged_indices
                 .iter()
@@ -551,7 +465,7 @@ fn get_cheapest_periods_conservative(
             // Full validation including all constraints
             if is_valid_combination(
                 &merged_combination,
-                actual_consecutive_selections,
+                min_consecutive_periods,
                 max_gap_between_periods,
                 max_gap_from_start,
                 price_items.len(),

@@ -11,73 +11,6 @@ except ImportError:
     _RUST_AVAILABLE = False
 
 
-def calculate_dynamic_consecutive_selections(
-    min_consecutive_periods: int,
-    max_consecutive_periods: int,
-    min_selections: int,
-    total_prices: int,
-    max_gap_between_periods: int,
-) -> int:
-    """
-    Calculate dynamic consecutive_selections based on heating requirements.
-
-    This function calculates the actual consecutive selections needed based on:
-    - min_consecutive_periods: Minimum allowed consecutive selections
-    - max_consecutive_periods: Maximum allowed consecutive selections
-    - min_selections: Total selections needed (correlates with historical heating duration)
-    - total_prices: Total number of price periods available
-    - max_gap_between_periods: Maximum gap between heating periods
-
-    Args:
-        min_consecutive_periods: Minimum allowed consecutive selections
-        max_consecutive_periods: Maximum allowed consecutive selections
-        min_selections: Total selections needed (correlates with historical heating duration)
-        total_prices: Total number of price periods available
-        max_gap_between_periods: Maximum gap between heating periods
-
-    Returns:
-        Calculated consecutive_selections value between min and max
-    """
-    # Calculate percentage of min_selections relative to total prices
-    if total_prices == 0:
-        return min_consecutive_periods
-    min_selections_percentage = min_selections / total_prices
-
-    # Base calculation based on percentage rules:
-    # - < 25% of total prices: use min_consecutive_periods
-    # - > 75% of total prices: use max_consecutive_periods
-    # - Between 25-75%: linear interpolation
-    if min_selections_percentage <= 0.25:
-        base_consecutive = min_consecutive_periods
-    elif min_selections_percentage >= 0.75:
-        base_consecutive = max_consecutive_periods
-    else:
-        # Linear interpolation between 25% and 75%
-        # Map 0.25-0.75 to 0.0-1.0 for interpolation
-        interpolation_factor = (min_selections_percentage - 0.25) / (0.75 - 0.25)
-        base_consecutive = int(
-            min_consecutive_periods
-            + interpolation_factor
-            * (max_consecutive_periods - min_consecutive_periods)
-        )
-
-    # Adjust based on gap between periods
-    # Larger gaps mean more consecutive heating needed
-    # Scale gap adjustment: larger gaps push toward max_consecutive_periods
-    gap_factor = min(max_gap_between_periods / 10.0, 1.0)  # Normalize gap to 0-1
-    gap_adjustment = int(
-        gap_factor * (max_consecutive_periods - min_consecutive_periods)
-    )
-
-    # Final calculation: base + gap adjustment
-    dynamic_consecutive = base_consecutive + gap_adjustment
-
-    # Ensure result is within bounds
-    return max(
-        min_consecutive_periods, min(dynamic_consecutive, max_consecutive_periods)
-    )
-
-
 def _is_valid_combination(
     combination: tuple[tuple[int, Decimal], ...],
     min_consecutive_periods: int,
@@ -198,20 +131,6 @@ def _get_cheapest_periods_python(
     cheap_items: tuple[tuple[int, Decimal], ...] = tuple(
         (index, price) for index, price in price_items if price <= low_price_threshold
     )
-    # Calculate actual consecutive selections based on cheap percentage
-    if len(price_items) == 0:
-        return []
-    cheap_percentage = len(cheap_items) / len(price_items)
-    if cheap_percentage > 0.8:
-        actual_consecutive_selections = min_consecutive_periods
-    else:
-        actual_consecutive_selections = calculate_dynamic_consecutive_selections(
-            min_consecutive_periods,
-            8,
-            min_selections,
-            len(price_items),
-            max_gap_between_periods,
-        )
 
     # Special case: if min_selections equals total items, return all of them
     if min_selections == len(price_items):
@@ -228,7 +147,7 @@ def _get_cheapest_periods_python(
             price_items,
             cheap_items,
             min_selections,
-            actual_consecutive_selections,
+            min_consecutive_periods,
             max_gap_between_periods,
             max_gap_from_start,
         )
@@ -238,7 +157,7 @@ def _get_cheapest_periods_python(
             price_items,
             cheap_items,
             min_selections,
-            actual_consecutive_selections,
+            min_consecutive_periods,
             max_gap_between_periods,
             max_gap_from_start,
         )
@@ -248,7 +167,7 @@ def _get_cheapest_periods_aggressive_python(
     price_items: tuple[tuple[int, Decimal], ...],
     cheap_items: tuple[tuple[int, Decimal], ...],
     min_selections: int,
-    actual_consecutive_selections: int,
+    min_consecutive_periods: int,
     max_gap_between_periods: int,
     max_gap_from_start: int,
 ) -> list[int]:
@@ -264,7 +183,7 @@ def _get_cheapest_periods_aggressive_python(
         ):
             if not _is_valid_combination(
                 price_item_combination,
-                actual_consecutive_selections,
+                min_consecutive_periods,
                 max_gap_between_periods,
                 max_gap_from_start,
                 len(price_items),
@@ -302,7 +221,7 @@ def _get_cheapest_periods_aggressive_python(
 
                 # Check if merged result maintains valid consecutive runs
                 if _check_consecutive_runs(
-                    merged_indices, actual_consecutive_selections
+                    merged_indices, min_consecutive_periods
                 ):
                     # Calculate average cost of this merged result
                     merged_cost = sum(price_items[i][1] for i in merged_indices)
@@ -346,7 +265,7 @@ def _get_cheapest_periods_conservative_python(
     price_items: tuple[tuple[int, Decimal], ...],
     cheap_items: tuple[tuple[int, Decimal], ...],
     min_selections: int,
-    actual_consecutive_selections: int,
+    min_consecutive_periods: int,
     max_gap_between_periods: int,
     max_gap_from_start: int,
 ) -> list[int]:
@@ -371,7 +290,7 @@ def _get_cheapest_periods_conservative_python(
 
                 if not _is_valid_combination(
                     cheap_price_items,
-                    actual_consecutive_selections,
+                    min_consecutive_periods,
                     max_gap_between_periods,
                     max_gap_from_start,
                     len(price_items),
@@ -400,7 +319,7 @@ def _get_cheapest_periods_conservative_python(
 
                         if _is_valid_combination(
                             combined_price_items,
-                            actual_consecutive_selections,
+                            min_consecutive_periods,
                             max_gap_between_periods,
                             max_gap_from_start,
                             len(price_items),
@@ -436,7 +355,6 @@ def get_cheapest_periods(
     low_price_threshold: Decimal,
     min_selections: int,
     min_consecutive_periods: int,
-    max_consecutive_periods: int,
     max_gap_between_periods: int = 0,
     max_gap_from_start: int = 0,
     aggressive: bool = True,
@@ -458,13 +376,9 @@ def get_cheapest_periods(
         min_selections: Desired minimum number of periods to select. If no valid
                        combination is found, this will be incremented by 1 until
                        a valid solution is found.
-        min_consecutive_periods: HARD CONSTRAINT - minimum consecutive periods always
-                                required for effective operation. This is enforced as a
-                                minimum for every consecutive block.
-        max_consecutive_periods: Maximum consecutive periods that may be needed (e.g.,
-                                after long idle time or adverse conditions). NOT a hard
-                                limit - actual consecutive periods can exceed this value.
-                                Used only for dynamic calculation of required consecutive periods.
+        min_consecutive_periods: Minimum consecutive periods required for each
+                                consecutive block. This is enforced as a minimum
+                                for every consecutive block.
         max_gap_between_periods: Maximum number of periods allowed between selected
                                periods. Controls the maximum downtime between operating
                                periods. Set to 0 to require consecutive selections only.
@@ -482,35 +396,15 @@ def get_cheapest_periods(
 
     Examples:
         >>> prices = [Decimal('0.05'), Decimal('0.08'), Decimal('0.12'), Decimal('0.06')]
-        >>> get_cheapest_periods(prices, Decimal('0.10'), 2, 1, 3, 1, 1)
+        >>> get_cheapest_periods(prices, Decimal('0.10'), 2, 1, 1, 1)
         [0, 1, 3]  # Selects periods 0, 1, 3 (all <= 0.10 and form valid runs)
-
-        >>> # Dynamic calculation based on min_selections percentage and gaps
-        >>> get_cheapest_periods(prices, Decimal('0.10'), 6, 2, 5, 3, 2)
-        [0, 1, 3]  # consecutive_selections calculated dynamically between 2-5
 
     Note:
         The algorithm uses adaptive retry logic:
-        1. Calculate dynamic consecutive requirements based on min/max bounds
-        2. Find cheapest main combination that meets constraints
-        3. Try adding cheap items to that combination
-        4. If no valid solution found, increment min_selections and retry
-
-        The actual consecutive_selections value is calculated dynamically:
-        - If min_selections < 25% of total prices: use min_consecutive_periods
-        - If min_selections > 75% of total prices: use max_consecutive_periods
-        - Between 25-75%: linear interpolation between min and max
-        - Larger gaps push the result closer to max_consecutive_periods
+        1. Find cheapest main combination that meets constraints
+        2. Try adding cheap items to that combination
+        3. If no valid solution found, increment min_selections and retry
     """
-    # Calculate dynamic consecutive_selections based on min/max bounds
-    actual_consecutive_selections = calculate_dynamic_consecutive_selections(
-        min_consecutive_periods=min_consecutive_periods,
-        max_consecutive_periods=max_consecutive_periods,
-        min_selections=min_selections,
-        total_prices=len(prices),
-        max_gap_between_periods=max_gap_between_periods,
-    )
-
     # Validate input parameters before calling either implementation
     if not prices:
         raise ValueError("prices cannot be empty")
@@ -526,22 +420,6 @@ def get_cheapest_periods(
 
     if min_consecutive_periods <= 0:
         raise ValueError("min_consecutive_periods must be greater than 0")
-
-    if max_consecutive_periods <= 0:
-        raise ValueError("max_consecutive_periods must be greater than 0")
-
-    if min_consecutive_periods > min_selections:
-        raise ValueError(
-            "min_consecutive_periods cannot be greater than min_selections"
-        )
-
-    if min_consecutive_periods > max_consecutive_periods:
-        raise ValueError(
-            "min_consecutive_periods cannot be greater than max_consecutive_periods"
-        )
-
-    # Note: actual_consecutive_selections can be greater than min_selections
-    # because consecutive_selections is per-block minimum, while min_selections is total minimum
 
     if max_gap_between_periods < 0:
         raise ValueError("max_gap_between_periods must be greater than or equal to 0")
@@ -563,7 +441,6 @@ def get_cheapest_periods(
             low_price_threshold_str,
             min_selections,
             min_consecutive_periods,
-            max_consecutive_periods,
             max_gap_between_periods,
             max_gap_from_start,
             aggressive,
@@ -574,7 +451,7 @@ def get_cheapest_periods(
             prices,
             low_price_threshold,
             min_selections,
-            actual_consecutive_selections,
+            min_consecutive_periods,
             max_gap_between_periods,
             max_gap_from_start,
             aggressive,

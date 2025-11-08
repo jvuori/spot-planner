@@ -31,7 +31,6 @@ class TestInvalidParameterCombinations:
                 low_price_threshold=Decimal("25"),
                 min_selections=5,  # More than 3 items
                 min_consecutive_periods=1,
-                max_consecutive_periods=8,
                 max_gap_between_periods=1,
                 max_gap_from_start=1,
             )
@@ -46,7 +45,6 @@ class TestInvalidParameterCombinations:
                 low_price_threshold=Decimal("25"),
                 min_selections=0,
                 min_consecutive_periods=1,
-                max_consecutive_periods=8,
                 max_gap_between_periods=1,
                 max_gap_from_start=1,
             )
@@ -61,7 +59,6 @@ class TestInvalidParameterCombinations:
                 low_price_threshold=Decimal("25"),
                 min_selections=-1,
                 min_consecutive_periods=1,
-                max_consecutive_periods=8,
                 max_gap_between_periods=1,
                 max_gap_from_start=1,
             )
@@ -78,7 +75,6 @@ class TestInvalidParameterCombinations:
                 low_price_threshold=Decimal("25"),
                 min_selections=2,
                 min_consecutive_periods=3,  # Greater than min_selections
-                max_consecutive_periods=8,
                 max_gap_between_periods=1,
                 max_gap_from_start=1,
             )
@@ -93,7 +89,6 @@ class TestInvalidParameterCombinations:
                 low_price_threshold=Decimal("25"),
                 min_selections=2,
                 min_consecutive_periods=0,
-                max_consecutive_periods=8,
                 max_gap_between_periods=1,
                 max_gap_from_start=1,
             )
@@ -108,7 +103,6 @@ class TestInvalidParameterCombinations:
                 low_price_threshold=Decimal("25"),
                 min_selections=2,
                 min_consecutive_periods=-1,
-                max_consecutive_periods=8,
                 max_gap_between_periods=1,
                 max_gap_from_start=1,
             )
@@ -125,7 +119,6 @@ class TestInvalidParameterCombinations:
                 low_price_threshold=Decimal("25"),
                 min_selections=2,
                 min_consecutive_periods=1,
-                max_consecutive_periods=8,
                 max_gap_between_periods=-1,
                 max_gap_from_start=1,
             )
@@ -142,7 +135,6 @@ class TestInvalidParameterCombinations:
                 low_price_threshold=Decimal("25"),
                 min_selections=2,
                 min_consecutive_periods=1,
-                max_consecutive_periods=8,
                 max_gap_between_periods=1,
                 max_gap_from_start=-1,
             )
@@ -159,7 +151,6 @@ class TestInvalidParameterCombinations:
                 low_price_threshold=Decimal("25"),
                 min_selections=2,
                 min_consecutive_periods=1,
-                max_consecutive_periods=8,
                 max_gap_between_periods=1,
                 max_gap_from_start=2,  # Greater than max_gap_between_periods
             )
@@ -172,7 +163,6 @@ class TestInvalidParameterCombinations:
                 low_price_threshold=Decimal("25"),
                 min_selections=1,
                 min_consecutive_periods=1,
-                max_consecutive_periods=8,
                 max_gap_between_periods=1,
                 max_gap_from_start=1,
             )
@@ -191,7 +181,6 @@ class TestRealWorldCornerCases:
             low_price_threshold=Decimal("20"),
             min_selections=1,
             min_consecutive_periods=1,
-            max_consecutive_periods=8,
             max_gap_between_periods=0,
             max_gap_from_start=0,
         )
@@ -207,7 +196,6 @@ class TestRealWorldCornerCases:
             low_price_threshold=Decimal("20"),
             min_selections=1,
             min_consecutive_periods=1,
-            max_consecutive_periods=8,
             max_gap_between_periods=0,
             max_gap_from_start=0,
         )
@@ -223,7 +211,6 @@ class TestRealWorldCornerCases:
             low_price_threshold=Decimal("25"),
             min_selections=2,
             min_consecutive_periods=1,
-            max_consecutive_periods=8,
             max_gap_between_periods=1,
             max_gap_from_start=1,
         )
@@ -239,7 +226,6 @@ class TestRealWorldCornerCases:
             low_price_threshold=Decimal("20"),
             min_selections=5,
             min_consecutive_periods=1,
-            max_consecutive_periods=8,
             max_gap_between_periods=2,
             max_gap_from_start=2,
         )
@@ -258,7 +244,6 @@ class TestRealWorldCornerCases:
             low_price_threshold=Decimal("40"),
             min_selections=2,
             min_consecutive_periods=1,
-            max_consecutive_periods=8,
             max_gap_between_periods=1,
             max_gap_from_start=1,
         )
@@ -280,7 +265,6 @@ class TestRealWorldCornerCases:
             low_price_threshold=Decimal("10.0003"),
             min_selections=3,
             min_consecutive_periods=1,
-            max_consecutive_periods=8,
             max_gap_between_periods=1,
             max_gap_from_start=1,
         )
@@ -302,7 +286,6 @@ class TestRealWorldCornerCases:
             low_price_threshold=Decimal("0.0"),
             min_selections=3,
             min_consecutive_periods=1,
-            max_consecutive_periods=8,
             max_gap_between_periods=1,
             max_gap_from_start=1,
         )
@@ -318,7 +301,6 @@ class TestRealWorldCornerCases:
             low_price_threshold=Decimal("5"),
             min_selections=2,
             min_consecutive_periods=1,
-            max_consecutive_periods=8,
             max_gap_between_periods=1,
             max_gap_from_start=1,
         )
@@ -338,7 +320,6 @@ class TestRealWorldCornerCases:
             low_price_threshold=Decimal("999999.98"),
             min_selections=2,
             min_consecutive_periods=1,
-            max_consecutive_periods=8,
             max_gap_between_periods=1,
             max_gap_from_start=1,
         )
@@ -355,7 +336,6 @@ class TestRealWorldCornerCases:
             low_price_threshold=Decimal("15"),
             min_selections=5,
             min_consecutive_periods=1,
-            max_consecutive_periods=8,
             max_gap_between_periods=0,  # No gaps allowed
             max_gap_from_start=0,
         )
@@ -371,7 +351,6 @@ class TestRealWorldCornerCases:
             low_price_threshold=Decimal("15"),
             min_selections=3,
             min_consecutive_periods=1,
-            max_consecutive_periods=8,
             max_gap_between_periods=10,  # Very loose
             max_gap_from_start=10,
         )
@@ -387,7 +366,6 @@ class TestRealWorldCornerCases:
             low_price_threshold=Decimal("25"),
             min_selections=2,
             min_consecutive_periods=2,  # Same as min_selections
-            max_consecutive_periods=8,
             max_gap_between_periods=1,
             max_gap_from_start=1,
         )
@@ -405,7 +383,6 @@ class TestRealWorldCornerCases:
                 low_price_threshold=Decimal("25"),
                 min_selections=2,
                 min_consecutive_periods=1,
-            max_consecutive_periods=8,
             max_gap_between_periods=0,  # No gaps
                 max_gap_from_start=0,
             )
@@ -419,7 +396,6 @@ class TestRealWorldCornerCases:
             low_price_threshold=Decimal("25"),
             min_selections=2,
             min_consecutive_periods=1,
-            max_consecutive_periods=8,
             max_gap_between_periods=1,
             max_gap_from_start=0,  # Must start from index 0
         )
@@ -436,7 +412,6 @@ class TestRealWorldCornerCases:
             low_price_threshold=Decimal("25"),
             min_selections=3,
             min_consecutive_periods=3,
-            max_consecutive_periods=8,
             max_gap_between_periods=0,  # No gaps allowed
             max_gap_from_start=0,
         )
@@ -455,7 +430,6 @@ class TestBoundaryConditions:
             low_price_threshold=Decimal("25"),
             min_selections=3,  # Same as total items
             min_consecutive_periods=1,
-            max_consecutive_periods=8,
             max_gap_between_periods=1,
             max_gap_from_start=1,
         )
@@ -470,7 +444,6 @@ class TestBoundaryConditions:
             low_price_threshold=Decimal("25"),
             min_selections=2,  # Same as cheap items count
             min_consecutive_periods=1,
-            max_consecutive_periods=8,
             max_gap_between_periods=1,
             max_gap_from_start=1,
         )
@@ -502,7 +475,6 @@ class TestBoundaryConditions:
                 low_price_threshold=Decimal("25"),
                 min_selections=2,
                 min_consecutive_periods=1,
-            max_consecutive_periods=8,
             max_gap_between_periods=0,  # No gaps
                 max_gap_from_start=0,
             )
@@ -516,7 +488,6 @@ class TestBoundaryConditions:
             low_price_threshold=Decimal("25"),
             min_selections=2,
             min_consecutive_periods=1,
-            max_consecutive_periods=8,
             max_gap_between_periods=1,
             max_gap_from_start=0,  # Must start from 0
         )
