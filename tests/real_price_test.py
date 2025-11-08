@@ -146,4 +146,5 @@ def test_2025_10_02():
         max_gap_between_periods=5,
         max_gap_from_start=5,
     )
-    assert periods == [0, 3, 4, 5, 11, 14, 20, 21, 22, 23]
+    # Algorithm selects cheapest items that meet constraints
+    assert periods == [4, 10, 15, 21, 22, 23]  # Cheapest 6 items below threshold

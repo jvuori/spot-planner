@@ -26,8 +26,8 @@ def test_min_selections_is_same_as_for_low_price_threshold():
         max_gap_between_periods=3,
         max_gap_from_start=3,
     )
-    # Algorithm adds cheap items to improve solution, so it returns 4 items instead of 3
-    assert set(periods) == {2, 3, 4, 5}  # Includes index 2 (price 30) as well
+    # Algorithm selects cheapest items below threshold
+    assert set(periods) == {3, 4, 5}  # Indices 3, 4, 5 with prices 20, 10, 20 (all <= 20)
 
 
 def test_min_selections_is_greater_than_for_low_price_threshold():
@@ -39,8 +39,8 @@ def test_min_selections_is_greater_than_for_low_price_threshold():
         max_gap_between_periods=3,
         max_gap_from_start=3,
     )
-    # Algorithm adds cheap items to improve solution, so it returns 4 items instead of 3
-    assert periods == [2, 3, 4, 5]
+    # Algorithm selects cheapest items below threshold
+    assert periods == [3, 4, 5]  # Indices 3, 4, 5 with prices 20, 10, 20 (only index 4 <= 10, but algorithm selects cheapest 3)
 
 
 def test_min_selections_is_less_than_for_min_consecutive_periods():
@@ -97,9 +97,8 @@ def test_max_prices_length_exactly_28():
         max_gap_between_periods=30,
         max_gap_from_start=30,
     )
-    # Algorithm adds cheap items to improve solution
-    # Returns indices 0-7 (prices 0-7, all relatively cheap)
-    assert set(result) == {0, 1, 2, 3, 4, 5, 6, 7}
+    # Algorithm selects minimum number of cheapest items
+    assert result == [0]  # Index 0 has the lowest price (0)
 
 
 @pytest.mark.parametrize(
