@@ -1,7 +1,7 @@
 """Test cases for spot_planner library behavior.
 
 These tests verify the external spot_planner library correctly handles
-the min_consecutive_selections parameter.
+the min_consecutive_periods parameter.
 """
 
 from decimal import Decimal
@@ -26,31 +26,31 @@ def _get_consecutive_runs(indices: list[int]) -> list[list[int]]:
     return runs
 
 
-def _verify_min_consecutive_selections(
-    indices: list[int], min_consecutive_selections: int
+def _verify_min_consecutive_periods(
+    indices: list[int], min_consecutive_periods: int
 ):
-    """Helper to verify all runs meet min_consecutive_selections."""
+    """Helper to verify all runs meet min_consecutive_periods."""
     runs = _get_consecutive_runs(indices)
     for run in runs:
         run_length = len(run)
-        assert run_length >= min_consecutive_selections, (
+        assert run_length >= min_consecutive_periods, (
             f"Run [{run[0]}..{run[-1]}] has length {run_length} "
-            f"which is less than min_consecutive_selections={min_consecutive_selections}. "
+            f"which is less than min_consecutive_periods={min_consecutive_periods}. "
             f"Full indices: {indices}"
         )
 
 
-def test_min_consecutive_selections_bug():
-    """Test that spot_planner respects min_consecutive_selections parameter.
+def test_min_consecutive_periods_bug():
+    """Test that spot_planner respects min_consecutive_periods parameter.
 
     This test reproduces a bug where spot_planner returns isolated single
-    selections even when min_consecutive_selections=4.
+    selections even when min_consecutive_periods=4.
 
     Bug: Index 8 is returned as an isolated selection (run length of 1),
-    which violates min_consecutive_selections=4.
+    which violates min_consecutive_periods=4.
 
     Expected behavior: All returned indices should be part of consecutive
-    runs of at least min_consecutive_selections length.
+    runs of at least min_consecutive_periods length.
     """
     # Real price data that exposes the bug
     prices = [
@@ -82,7 +82,7 @@ def test_min_consecutive_selections_bug():
 
     low_price_threshold = Decimal("8.080049881693729063745019920")
     min_selections = 4
-    min_consecutive_selections = 4
+    min_consecutive_periods = 4
     max_gap_between_periods = 22
     max_gap_from_start = 7
 
@@ -90,30 +90,30 @@ def test_min_consecutive_selections_bug():
         prices=prices,
         low_price_threshold=low_price_threshold,
         min_selections=min_selections,
-        min_consecutive_selections=min_consecutive_selections,
+        min_consecutive_periods=min_consecutive_periods,
         max_gap_between_periods=max_gap_between_periods,
         max_gap_from_start=max_gap_from_start,
     )
 
-    # Verify all runs meet min_consecutive_selections
-    _verify_min_consecutive_selections(indices, min_consecutive_selections)
+    # Verify all runs meet min_consecutive_periods
+    _verify_min_consecutive_periods(indices, min_consecutive_periods)
 
     # Expected: index 8 should NOT be in the result
     # because it forms a run of only 1 selection
     assert 8 not in indices, (
         f"Index 8 should not be included as it forms a run shorter than "
-        f"min_consecutive_selections={min_consecutive_selections}. "
+        f"min_consecutive_periods={min_consecutive_periods}. "
         f"Actual indices: {indices}"
     )
 
 
-def test_min_consecutive_selections_simple_case():
-    """Test min_consecutive_selections with a simple case."""
+def test_min_consecutive_periods_simple_case():
+    """Test min_consecutive_periods with a simple case."""
     # Simple case: 10 prices, all cheap
     prices = [Decimal(str(i)) for i in range(10)]
     low_price_threshold = Decimal("100.0")  # All prices are below this
     min_selections = 4
-    min_consecutive_selections = 4
+    min_consecutive_periods = 4
     max_gap_between_periods = 10
     max_gap_from_start = 10
 
@@ -121,7 +121,7 @@ def test_min_consecutive_selections_simple_case():
         prices=prices,
         low_price_threshold=low_price_threshold,
         min_selections=min_selections,
-        min_consecutive_selections=min_consecutive_selections,
+        min_consecutive_periods=min_consecutive_periods,
         max_gap_between_periods=max_gap_between_periods,
         max_gap_from_start=max_gap_from_start,
     )
@@ -129,5 +129,5 @@ def test_min_consecutive_selections_simple_case():
     # Should get at least min_selections
     assert len(indices) >= min_selections
 
-    # Verify all runs meet min_consecutive_selections
-    _verify_min_consecutive_selections(indices, min_consecutive_selections)
+    # Verify all runs meet min_consecutive_periods
+    _verify_min_consecutive_periods(indices, min_consecutive_periods)

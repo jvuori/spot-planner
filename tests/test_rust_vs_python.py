@@ -16,7 +16,7 @@ class TestRustVsPython:
     """Test suite comparing Rust and Python implementations."""
 
     @pytest.mark.parametrize(
-        "scenario_name,prices,low_price_threshold,min_selections,min_consecutive_selections,max_gap_between_periods,max_gap_from_start",
+        "scenario_name,prices,low_price_threshold,min_selections,min_consecutive_periods,max_gap_between_periods,max_gap_from_start",
         [
             pytest.param(*scenario, id=scenario[0])
             for scenario in [
@@ -306,7 +306,7 @@ class TestRustVsPython:
         prices,
         low_price_threshold,
         min_selections,
-        min_consecutive_selections,
+        min_consecutive_periods,
         max_gap_between_periods,
         max_gap_from_start,
     ):
@@ -317,8 +317,7 @@ class TestRustVsPython:
                 prices,
                 low_price_threshold,
                 min_selections,
-                min_consecutive_selections,
-                8,  # max_consecutive_selections
+                min_consecutive_periods,
                 max_gap_between_periods,
                 max_gap_from_start,
             )
@@ -326,7 +325,7 @@ class TestRustVsPython:
                 prices,
                 low_price_threshold,
                 min_selections,
-                min_consecutive_selections,
+                min_consecutive_periods,
                 max_gap_between_periods,
                 max_gap_from_start,
             )
@@ -339,7 +338,7 @@ class TestRustVsPython:
                 f"Price data: {prices}\n"
                 f"Threshold: {low_price_threshold}\n"
                 f"Desired count: {min_selections}\n"
-                f"Min period: {min_consecutive_selections}\n"
+                f"Min period: {min_consecutive_periods}\n"
                 f"Max gap: {max_gap_between_periods}\n"
                 f"Max start gap: {max_gap_from_start}"
             )
@@ -352,7 +351,7 @@ class TestRustVsPython:
                     prices,
                     low_price_threshold,
                     min_selections,
-                    min_consecutive_selections,
+                    min_consecutive_periods,
                     max_gap_between_periods,
                     max_gap_from_start,
                 )
@@ -365,7 +364,7 @@ class TestRustVsPython:
                 )
 
     @pytest.mark.parametrize(
-        "min_selections,min_consecutive_selections,max_gap_between_periods,max_gap_from_start",
+        "min_selections,min_consecutive_periods,max_gap_between_periods,max_gap_from_start",
         [
             (0, 1, 1, 1),
             (1, 1, 1, 1),
@@ -394,7 +393,7 @@ class TestRustVsPython:
     def test_rust_vs_python_parameter_combinations(
         self,
         min_selections,
-        min_consecutive_selections,
+        min_consecutive_periods,
         max_gap_between_periods,
         max_gap_from_start,
     ):
@@ -430,8 +429,7 @@ class TestRustVsPython:
                 prices,
                 low_price_threshold,
                 min_selections,
-                min_consecutive_selections,
-                8,  # max_consecutive_selections
+                min_consecutive_periods,
                 max_gap_between_periods,
                 max_gap_from_start,
             )
@@ -439,7 +437,7 @@ class TestRustVsPython:
                 prices,
                 low_price_threshold,
                 min_selections,
-                min_consecutive_selections,
+                min_consecutive_periods,
                 max_gap_between_periods,
                 max_gap_from_start,
             )
@@ -450,7 +448,7 @@ class TestRustVsPython:
                 f"Rust result: {rust_result}\n"
                 f"Python result: {python_result}\n"
                 f"Desired count: {min_selections}\n"
-                f"Min period: {min_consecutive_selections}\n"
+                f"Min period: {min_consecutive_periods}\n"
                 f"Max gap: {max_gap_between_periods}\n"
                 f"Max start gap: {max_gap_from_start}"
             )
@@ -463,7 +461,7 @@ class TestRustVsPython:
                     prices,
                     low_price_threshold,
                     min_selections,
-                    min_consecutive_selections,
+                    min_consecutive_periods,
                     max_gap_between_periods,
                     max_gap_from_start,
                 )
@@ -476,7 +474,7 @@ class TestRustVsPython:
                 )
 
     @pytest.mark.parametrize(
-        "prices,low_price_threshold,min_selections,min_consecutive_selections,max_gap_between_periods,max_gap_from_start",
+        "prices,low_price_threshold,min_selections,min_consecutive_periods,max_gap_between_periods,max_gap_from_start",
         [
             # Empty price data
             ([], Decimal("10"), 1, 1, 1, 1),
@@ -497,7 +495,7 @@ class TestRustVsPython:
         prices,
         low_price_threshold,
         min_selections,
-        min_consecutive_selections,
+        min_consecutive_periods,
         max_gap_between_periods,
         max_gap_from_start,
     ):
@@ -507,8 +505,7 @@ class TestRustVsPython:
                 prices,
                 low_price_threshold,
                 min_selections,
-                min_consecutive_selections,
-                8,  # max_consecutive_selections
+                min_consecutive_periods,
                 max_gap_between_periods,
                 max_gap_from_start,
             )
@@ -516,7 +513,7 @@ class TestRustVsPython:
                 prices,
                 low_price_threshold,
                 min_selections,
-                min_consecutive_selections,
+                min_consecutive_periods,
                 max_gap_between_periods,
                 max_gap_from_start,
             )
@@ -528,7 +525,7 @@ class TestRustVsPython:
                 f"Price data: {prices}\n"
                 f"Threshold: {low_price_threshold}\n"
                 f"Desired count: {min_selections}\n"
-                f"Min period: {min_consecutive_selections}\n"
+                f"Min period: {min_consecutive_periods}\n"
                 f"Max gap: {max_gap_between_periods}\n"
                 f"Max start gap: {max_gap_from_start}"
             )
@@ -541,7 +538,7 @@ class TestRustVsPython:
                     prices,
                     low_price_threshold,
                     min_selections,
-                    min_consecutive_selections,
+                    min_consecutive_periods,
                     max_gap_between_periods,
                     max_gap_from_start,
                 )
@@ -567,7 +564,7 @@ class TestRustVsPython:
             # Generate random parameters (ensure valid combinations)
             low_price_threshold = Decimal(str(random.uniform(10, 80)))
             min_selections = random.randint(1, 10)  # Must be > 0
-            min_consecutive_selections = random.randint(
+            min_consecutive_periods = random.randint(
                 1, min(5, min_selections)
             )  # Must be <= min_selections
             max_gap_between_periods = random.randint(1, 5)
@@ -580,8 +577,7 @@ class TestRustVsPython:
                     prices,
                     low_price_threshold,
                     min_selections,
-                    min_consecutive_selections,
-                    8,  # max_consecutive_selections
+                    min_consecutive_periods,
                     max_gap_between_periods,
                     max_gap_from_start,
                 )
@@ -589,7 +585,7 @@ class TestRustVsPython:
                     prices,
                     low_price_threshold,
                     min_selections,
-                    min_consecutive_selections,
+                    min_consecutive_periods,
                     max_gap_between_periods,
                     max_gap_from_start,
                 )
@@ -601,7 +597,7 @@ class TestRustVsPython:
                     f"Price data: {prices}\n"
                     f"Threshold: {low_price_threshold}\n"
                     f"Desired count: {min_selections}\n"
-                    f"Min period: {min_consecutive_selections}\n"
+                    f"Min period: {min_consecutive_periods}\n"
                     f"Max gap: {max_gap_between_periods}\n"
                     f"Max start gap: {max_gap_from_start}"
                 )
@@ -613,13 +609,13 @@ class TestRustVsPython:
                         prices,
                         low_price_threshold,
                         min_selections,
-                        min_consecutive_selections,
+                        min_consecutive_periods,
                         max_gap_between_periods,
                         max_gap_from_start,
                     )
 
     @pytest.mark.parametrize(
-        "low_price_threshold,min_selections,min_consecutive_selections,max_gap_between_periods,max_gap_from_start",
+        "low_price_threshold,min_selections,min_consecutive_periods,max_gap_between_periods,max_gap_from_start",
         [
             (Decimal("10"), 12, 1, 1, 1),
             (Decimal("5"), 15, 2, 1, 1),
@@ -631,7 +627,7 @@ class TestRustVsPython:
         self,
         low_price_threshold,
         min_selections,
-        min_consecutive_selections,
+        min_consecutive_periods,
         max_gap_between_periods,
         max_gap_from_start,
     ):
@@ -639,14 +635,11 @@ class TestRustVsPython:
         # Use the same data as the original performance test but with more variations
         base_prices = [Decimal(f"{i}") for i in range(20)]
 
-        # Fix parameter validation issues
-        max_consecutive = 8 if min_consecutive_selections <= 8 else min_consecutive_selections + 1
         rust_result = get_cheapest_periods(
             base_prices,
             low_price_threshold,
             min_selections,
-            min_consecutive_selections,
-            max_consecutive,
+            min_consecutive_periods,
             max_gap_between_periods,
             max_gap_from_start,
         )
@@ -654,7 +647,7 @@ class TestRustVsPython:
             base_prices,
             low_price_threshold,
             min_selections,
-            min_consecutive_selections,
+            min_consecutive_periods,
             max_gap_between_periods,
             max_gap_from_start,
         )
@@ -664,7 +657,7 @@ class TestRustVsPython:
             f"Rust result: {rust_result}\n"
             f"Python result: {python_result}\n"
             f"Parameters: threshold={low_price_threshold}, count={min_selections}, "
-            f"min_consecutive_selections={min_consecutive_selections}, max_gap_between_periods={max_gap_between_periods}, max_gap_from_start={max_gap_from_start}"
+            f"min_consecutive_periods={min_consecutive_periods}, max_gap_between_periods={max_gap_between_periods}, max_gap_from_start={max_gap_from_start}"
         )
 
     def test_rust_vs_python_decimal_precision(self):
@@ -681,7 +674,7 @@ class TestRustVsPython:
         low_price_threshold = Decimal("20.5")
 
         rust_result = get_cheapest_periods(
-            high_precision_prices, low_price_threshold, 2, 1, 8, 1, 1
+            high_precision_prices, low_price_threshold, 2, 1, 1, 1
         )
         python_result = _get_cheapest_periods_python(
             high_precision_prices, low_price_threshold, 2, 1, 1, 1
@@ -725,8 +718,7 @@ class TestRustVsPython:
         ]
         low_price_threshold = Decimal("4.355812749003984063745019920")
         min_selections = 16
-        min_consecutive_selections = 4
-        max_consecutive_selections = 8
+        min_consecutive_periods = 4
         max_gap_between_periods = 18
         max_gap_from_start = 16
 
@@ -735,8 +727,7 @@ class TestRustVsPython:
             prices,
             low_price_threshold,
             min_selections,
-            min_consecutive_selections,
-            max_consecutive_selections,
+            min_consecutive_periods,
             max_gap_between_periods,
             max_gap_from_start,
         )
@@ -744,7 +735,7 @@ class TestRustVsPython:
             prices,
             low_price_threshold,
             min_selections,
-            min_consecutive_selections,
+            min_consecutive_periods,
             max_gap_between_periods,
             max_gap_from_start,
         )
