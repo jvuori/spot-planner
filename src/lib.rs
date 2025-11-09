@@ -29,7 +29,13 @@ fn group_consecutive_items(items: &[(usize, Decimal)]) -> Vec<Vec<(usize, Decima
 }
 
 /// Check if indices have valid consecutive runs (matches Python _check_consecutive_runs)
-fn check_consecutive_runs(indices: &[usize], min_consecutive_periods: usize) -> bool {
+/// If the last index is at the end of the price sequence (full_length - 1), don't enforce
+/// min_consecutive_periods for the last block because we don't know future prices.
+fn check_consecutive_runs(
+    indices: &[usize],
+    min_consecutive_periods: usize,
+    full_length: usize,
+) -> bool {
     if indices.is_empty() {
         return false;
     }
@@ -47,7 +53,16 @@ fn check_consecutive_runs(indices: &[usize], min_consecutive_periods: usize) -> 
     }
 
     // Check the last run
-    current_run_length >= min_consecutive_periods
+    // If the last index is at the end of the price sequence, don't enforce min_consecutive_periods
+    // because we don't know future prices that might extend this block
+    let last_index = indices[indices.len() - 1];
+    let is_at_end = last_index == full_length - 1;
+    if is_at_end {
+        // At the end, so don't enforce min_consecutive_periods for the last block
+        true
+    } else {
+        current_run_length >= min_consecutive_periods
+    }
 }
 
 /// Check if a combination of price items is valid according to the constraints
@@ -101,7 +116,11 @@ fn is_valid_combination(
     }
 
     // Check last block min_consecutive_periods
-    if block_length < min_consecutive_periods {
+    // If the last index is at the end of the price sequence, don't enforce min_consecutive_periods
+    // because we don't know future prices that might extend this block
+    let last_index = indices[indices.len() - 1];
+    let is_at_end = last_index == full_length - 1;
+    if !is_at_end && block_length < min_consecutive_periods {
         return false;
     }
 
@@ -322,7 +341,11 @@ fn get_cheapest_periods_aggressive(
                 merged_indices.sort();
 
                 // Check if merged result maintains valid consecutive runs
-                if check_consecutive_runs(&merged_indices, min_consecutive_periods) {
+                if check_consecutive_runs(
+                    &merged_indices,
+                    min_consecutive_periods,
+                    price_items.len(),
+                ) {
                     // Calculate average cost of this merged result
                     let merged_cost: Decimal =
                         merged_indices.iter().map(|&i| price_items[i].1).sum();
@@ -463,7 +486,7 @@ fn get_cheapest_periods_conservative(
         merged_indices.sort();
 
         // Check if merged result maintains valid consecutive runs
-        if check_consecutive_runs(&merged_indices, min_consecutive_periods) {
+        if check_consecutive_runs(&merged_indices, min_consecutive_periods, price_items.len()) {
             // Create the merged combination for full validation
             let merged_combination: Vec<(usize, Decimal)> = merged_indices
                 .iter()

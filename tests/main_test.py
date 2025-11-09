@@ -214,3 +214,96 @@ def test_is_valid_max_gap_from_start(
         )
         == expected
     )
+
+
+def test_min_consecutive_periods_ending_at_last_price_item():
+    """Test that min_consecutive_periods is not enforced for the last block if it ends at the last price item."""
+    # Test case 1: Selection ending at last price item with short consecutive block should be valid
+    # Prices: [10, 20, 30, 40, 50] (indices 0-4)
+    # Selection: [3, 4] with min_consecutive_periods=3
+    # Since index 4 is the last item, the block [3, 4] (length 2) should be valid even though 2 < 3
+    combination = tuple([(3, Decimal("40")), (4, Decimal("50"))])
+    assert _is_valid_combination(
+        combination,
+        min_consecutive_periods=3,
+        max_gap_between_periods=100,
+        max_gap_from_start=100,
+        full_length=5,  # Last index is 4, which equals full_length - 1
+    ) is True
+
+    # Test case 2: Selection NOT ending at last price item with short consecutive block should be invalid
+    # Prices: [10, 20, 30, 40, 50] (indices 0-4)
+    # Selection: [2, 3] with min_consecutive_periods=3
+    # Since index 3 is NOT the last item, the block [2, 3] (length 2) should be invalid
+    combination = tuple([(2, Decimal("30")), (3, Decimal("40"))])
+    assert _is_valid_combination(
+        combination,
+        min_consecutive_periods=3,
+        max_gap_between_periods=100,
+        max_gap_from_start=100,
+        full_length=5,  # Last index is 3, which is NOT full_length - 1
+    ) is False
+
+    # Test case 3: Selection with multiple blocks, last block ending at last price item
+    # Prices: [10, 20, 30, 40, 50, 60] (indices 0-5)
+    # Selection: [0, 1, 2, 4, 5] with min_consecutive_periods=3
+    # First block [0, 1, 2] has length 3 >= 3, so valid
+    # Last block [4, 5] has length 2 < 3, but index 5 is the last item, so should be valid
+    combination = tuple([
+        (0, Decimal("10")),
+        (1, Decimal("20")),
+        (2, Decimal("30")),
+        (4, Decimal("50")),
+        (5, Decimal("60")),
+    ])
+    assert _is_valid_combination(
+        combination,
+        min_consecutive_periods=3,
+        max_gap_between_periods=100,
+        max_gap_from_start=100,
+        full_length=6,  # Last index is 5, which equals full_length - 1
+    ) is True
+
+    # Test case 4: Selection with multiple blocks, last block NOT ending at last price item
+    # Prices: [10, 20, 30, 40, 50, 60] (indices 0-5)
+    # Selection: [0, 1, 2, 4, 5] with min_consecutive_periods=3
+    # First block [0, 1, 2] has length 3 >= 3, so valid
+    # Last block [4, 5] has length 2 < 3, and index 5 IS the last item, so should be valid
+    # But wait, let's test with a selection that doesn't end at the last item
+    # Selection: [0, 1, 2, 4] with min_consecutive_periods=3
+    # First block [0, 1, 2] has length 3 >= 3, so valid
+    # Last block [4] has length 1 < 3, and index 4 is NOT the last item (full_length=6), so should be invalid
+    combination = tuple([
+        (0, Decimal("10")),
+        (1, Decimal("20")),
+        (2, Decimal("30")),
+        (4, Decimal("50")),
+    ])
+    assert _is_valid_combination(
+        combination,
+        min_consecutive_periods=3,
+        max_gap_between_periods=100,
+        max_gap_from_start=100,
+        full_length=6,  # Last index is 4, which is NOT full_length - 1
+    ) is False
+
+
+def test_get_cheapest_periods_with_ending_at_last_price():
+    """Test that get_cheapest_periods can select periods ending at the last price item even if too short."""
+    # Create prices where the cheapest period is at the end but too short
+    # Prices: [50, 50, 50, 50, 10] (indices 0-4)
+    # With min_consecutive_periods=3, we should be able to select [4] (the last item)
+    # even though it's only 1 period, because it's at the end
+    # Note: min_selections must be >= min_consecutive_periods for validation
+    prices = [Decimal("50"), Decimal("50"), Decimal("50"), Decimal("50"), Decimal("10")]
+    result = get_cheapest_periods(
+        prices=prices,
+        low_price_threshold=Decimal("20"),
+        min_selections=3,  # Must be >= min_consecutive_periods
+        min_consecutive_periods=3,
+        max_gap_between_periods=100,
+        max_gap_from_start=100,
+    )
+    # Should be able to select the last item even though it's only 1 period
+    assert len(result) >= 1
+    assert 4 in result  # The last item (index 4) should be selected

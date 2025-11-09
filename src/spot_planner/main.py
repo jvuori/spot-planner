@@ -47,7 +47,11 @@ def _is_valid_combination(
             block_length = 1
 
     # Check last block min_consecutive_periods
-    if block_length < min_consecutive_periods:
+    # If the last index is at the end of the price sequence, don't enforce min_consecutive_periods
+    # because we don't know future prices that might extend this block
+    last_index = indices[-1]
+    is_at_end = last_index == full_length - 1
+    if not is_at_end and block_length < min_consecutive_periods:
         return False
 
     # Check end gap
@@ -83,13 +87,17 @@ def _group_consecutive_items(
 
 
 def _check_consecutive_runs(
-    indices: list[int], min_consecutive_periods: int
+    indices: list[int], min_consecutive_periods: int, full_length: int
 ) -> bool:
     """Check if all consecutive runs in indices meet the minimum length requirement.
+
+    If the last index is at the end of the price sequence (full_length - 1), don't enforce
+    min_consecutive_periods for the last block because we don't know future prices.
 
     Args:
         indices: Sorted list of indices
         min_consecutive_periods: Minimum required length for each consecutive run
+        full_length: Total length of the price sequence
 
     Returns:
         True if all runs meet the requirement, False otherwise
@@ -112,10 +120,15 @@ def _check_consecutive_runs(
             run_length = 1
 
     # Check the last run
-    if run_length < min_consecutive_periods:
-        return False
-
-    return True
+    # If the last index is at the end of the price sequence, don't enforce min_consecutive_periods
+    # because we don't know future prices that might extend this block
+    last_index = indices[-1]
+    is_at_end = last_index == full_length - 1
+    if is_at_end:
+        # At the end, so don't enforce min_consecutive_periods for the last block
+        return True
+    else:
+        return run_length >= min_consecutive_periods
 
 
 def _get_cheapest_periods_python(
@@ -221,7 +234,7 @@ def _get_cheapest_periods_aggressive_python(
 
                 # Check if merged result maintains valid consecutive runs
                 if _check_consecutive_runs(
-                    merged_indices, min_consecutive_periods
+                    merged_indices, min_consecutive_periods, len(price_items)
                 ):
                     # Calculate average cost of this merged result
                     merged_cost = sum(price_items[i][1] for i in merged_indices)
@@ -422,7 +435,9 @@ def get_cheapest_periods(
         raise ValueError("min_consecutive_periods must be greater than 0")
 
     if min_consecutive_periods > min_selections:
-        raise ValueError("min_consecutive_periods cannot be greater than min_selections")
+        raise ValueError(
+            "min_consecutive_periods cannot be greater than min_selections"
+        )
 
     if max_gap_between_periods < 0:
         raise ValueError("max_gap_between_periods must be greater than or equal to 0")
