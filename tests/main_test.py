@@ -72,18 +72,20 @@ def test_min_selections_is_zero():
         )
 
 
-def test_max_prices_length():
-    # Test that prices cannot contain more than 28 items
+def test_extended_algorithm_for_longer_sequences():
+    # Test that prices with more than 28 items uses the extended algorithm
     prices_29 = [Decimal(str(i)) for i in range(29)]
-    with pytest.raises(ValueError, match="prices cannot contain more than 28 items"):
-        get_cheapest_periods(
-            prices=prices_29,
-            low_price_threshold=Decimal("10"),
-            min_selections=1,
-            min_consecutive_periods=1,
-            max_gap_between_periods=5,
-            max_gap_from_start=5,
-        )
+    result = get_cheapest_periods(
+        prices=prices_29,
+        low_price_threshold=Decimal("10"),
+        min_selections=5,
+        min_consecutive_periods=2,
+        max_gap_between_periods=5,
+        max_gap_from_start=5,
+    )
+    # Should successfully return a result using the extended algorithm
+    assert len(result) >= 5
+    assert all(0 <= idx < 29 for idx in result)
 
 
 def test_max_prices_length_exactly_28():
