@@ -679,11 +679,11 @@ def _find_best_chunk_selection_with_lookahead(
                 boundary = _calculate_chunk_boundary_state(selection, chunk_len)
                 # Check if it creates a complete block at the end
                 if boundary.trailing_selected_count >= min_consecutive_periods:
-                    chunk_cost: Decimal = sum(
+                    complete_block_cost: Decimal = sum(
                         (chunk_prices[i] for i in selection), Decimal(0)
                     )
                     # No forced cost since block is complete
-                    candidates.append((selection, chunk_cost))
+                    candidates.append((selection, complete_block_cost))
                     break
 
     # Strategy 3: Try ending with unselected items (gap at end)
@@ -771,6 +771,56 @@ def _find_best_chunk_selection_with_lookahead(
     return best_selection
 
 
+def _calculate_optimal_chunk_size(
+    total_items: int,
+    min_consecutive_periods: int,
+    max_gap_between_periods: int,
+) -> int:
+    """
+    Calculate optimal chunk size based on sequence length and constraints.
+
+    Smaller chunks = faster but more boundary issues
+    Larger chunks = slower but fewer boundary issues
+
+    Strategy:
+    - Very small sequences (<=48): Use medium chunks (20) for good balance
+    - Small sequences (49-96): Use medium chunks (18-20)
+    - Medium sequences (97-192): Use smaller chunks (15-18) for performance
+    - Large sequences (>192): Use smallest chunks (12-15) for speed
+
+    Also considers constraints:
+    - Large max_gap allows smaller chunks (boundaries less critical)
+    - Large min_consecutive needs larger chunks (boundaries more critical)
+    """
+    # Base chunk size based on sequence length
+    if total_items <= 48:
+        base_size = 20
+    elif total_items <= 96:
+        base_size = 18
+    elif total_items <= 192:
+        base_size = 15
+    else:
+        base_size = 12
+
+    # Adjust based on constraints
+    # If max_gap is large, boundaries are less critical - can use smaller chunks
+    if max_gap_between_periods >= 15:
+        base_size = max(12, base_size - 2)
+    elif max_gap_between_periods >= 10:
+        base_size = max(12, base_size - 1)
+
+    # If min_consecutive is large, boundaries are more critical - need larger chunks
+    if min_consecutive_periods >= 6:
+        base_size = min(24, base_size + 2)
+    elif min_consecutive_periods >= 4:
+        base_size = min(24, base_size + 1)
+
+    # Ensure chunk size is reasonable (not too small, not too large)
+    # Too small: < 10 items per chunk becomes inefficient
+    # Too large: > 24 items per chunk becomes slow
+    return max(10, min(24, base_size))
+
+
 def _get_cheapest_periods_extended(
     prices: Sequence[Decimal],
     low_price_threshold: Decimal,
@@ -800,12 +850,17 @@ def _get_cheapest_periods_extended(
     - For each chunk, multiple selection strategies are evaluated
     - The cost of forced selections in the next chunk is considered
     - The strategy with lowest combined cost is chosen
+
+    Chunk size is adaptively determined based on sequence length and constraints
+    to optimize the performance/optimality trade-off.
     """
     n = len(prices)
 
-    # Configuration constants
-    # 20 items per chunk is fast and reliable for brute-force
-    MAX_CHUNK_SIZE = 20
+    # Calculate optimal chunk size adaptively
+    MAX_CHUNK_SIZE = _calculate_optimal_chunk_size(
+        n, min_consecutive_periods, max_gap_between_periods
+    )
+
     # 4 items per average group gives good rough planning resolution
     AVERAGE_GROUP_SIZE = 4
 
