@@ -495,3 +495,139 @@ class TestAggressiveVsConservative:
         assert len(result_conservative) >= 15
         assert _validate_full_selection(result_conservative, 50, 2, 5, 3)
 
+
+class TestLookaheadOptimization:
+    """Test that look-ahead optimization considers next chunk costs."""
+
+    def test_lookahead_avoids_forcing_expensive_next_chunk(self):
+        """
+        Test scenario where look-ahead should prevent forcing expensive selections.
+
+        Setup: 40 items in 2 chunks of 20
+        - Chunk 1: items 0-19, cheap items at positions 0-5, expensive at 15-19
+        - Chunk 2: items 20-39, very expensive items at positions 0-5 (20-25 globally)
+
+        Without look-ahead: Chunk 1 might end with items 17,18,19 selected
+        (locally cheapest ending), but min_consecutive=6 would force 20,21,22
+        to be selected in chunk 2 (very expensive).
+
+        With look-ahead: Should prefer ending chunk 1 with a complete block
+        or not ending with selected items to avoid forcing expensive chunk 2 start.
+        """
+        prices = []
+        # Chunk 1: 20 items
+        for i in range(20):
+            if i < 6:
+                prices.append(Decimal("1"))  # Cheap start
+            elif i < 15:
+                prices.append(Decimal("5"))  # Medium middle
+            else:
+                prices.append(Decimal("3"))  # Cheaper end (trap!)
+
+        # Chunk 2: 20 items
+        for i in range(20):
+            if i < 6:
+                prices.append(Decimal("100"))  # Very expensive start
+            else:
+                prices.append(Decimal("2"))  # Cheap rest
+
+        result = get_cheapest_periods(
+            prices=prices,
+            low_price_threshold=Decimal("10"),
+            min_selections=12,
+            min_consecutive_periods=6,
+            max_gap_between_periods=10,
+            max_gap_from_start=5,
+        )
+
+        assert len(result) >= 12
+        assert _validate_full_selection(result, 40, 6, 10, 5)
+
+        # Calculate total cost
+        total_cost = sum(prices[i] for i in result)
+
+        # The total cost should be reasonable - if look-ahead works,
+        # we shouldn't have many items from the expensive 20-25 range
+        expensive_count = sum(1 for i in result if 20 <= i < 26)
+
+        # With good look-ahead, we should minimize expensive selections
+        # Perfect solution would have 0-6 expensive items depending on constraints
+        assert expensive_count < 6, f"Too many expensive items selected: {expensive_count}"
+
+    def test_lookahead_with_consecutive_block_spanning_chunks(self):
+        """
+        Test that look-ahead handles consecutive blocks spanning chunk boundaries.
+
+        If min_consecutive_periods=8 and chunk size is 20, a block could span
+        two chunks. Look-ahead should consider this.
+        """
+        # Create prices where the cheapest 8-item block spans chunks 1 and 2
+        prices = []
+        for i in range(60):
+            if 16 <= i < 24:  # Items 16-23: very cheap, spans chunk boundary at 20
+                prices.append(Decimal("1"))
+            else:
+                prices.append(Decimal("10"))
+
+        result = get_cheapest_periods(
+            prices=prices,
+            low_price_threshold=Decimal("5"),
+            min_selections=8,
+            min_consecutive_periods=8,
+            max_gap_between_periods=20,  # Must be >= max_gap_from_start
+            max_gap_from_start=15,
+        )
+
+        assert len(result) >= 8
+        assert _validate_full_selection(result, 60, 8, 20, 15)
+
+        # The cheap items (16-23) should be preferred
+        cheap_selected = sum(1 for i in result if 16 <= i < 24)
+        assert cheap_selected >= 4, "Should select most of the cheap spanning block"
+
+    def test_lookahead_total_cost_optimization(self):
+        """
+        Verify that look-ahead produces valid results with reasonable cost.
+
+        This test creates a scenario where the algorithm must balance
+        local and global optimization.
+        """
+        # Chunk 1 (0-19): Cheap items at 0-3 and 16-19
+        # Chunk 2 (20-39): Very expensive at 20-23, cheap at 24-39
+
+        prices = (
+            [Decimal("2")] * 4  # 0-3: cheap
+            + [Decimal("8")] * 12  # 4-15: medium
+            + [Decimal("2")] * 4  # 16-19: cheap (complete block at end of chunk 1)
+            + [Decimal("50")] * 4  # 20-23: very expensive
+            + [Decimal("3")] * 16  # 24-39: cheap
+        )
+
+        assert len(prices) == 40
+
+        result = get_cheapest_periods(
+            prices=prices,
+            low_price_threshold=Decimal("10"),
+            min_selections=10,
+            min_consecutive_periods=4,
+            max_gap_between_periods=10,  # Allow larger gaps
+            max_gap_from_start=3,
+        )
+
+        assert len(result) >= 10
+        assert _validate_full_selection(result, 40, 4, 10, 3)
+
+        # Calculate actual cost
+        total_cost = sum(prices[i] for i in result)
+
+        # The algorithm should find a valid solution
+        # With these constraints, it should be able to avoid most expensive items
+        # by selecting 0-3, 16-19, and items from 24+
+        cheap_chunk1_end = sum(1 for i in result if 16 <= i < 20)
+        cheap_chunk2 = sum(1 for i in result if 24 <= i < 40)
+
+        # Should prefer cheap items
+        assert cheap_chunk1_end + cheap_chunk2 >= 4, (
+            "Should select from cheap regions"
+        )
+
