@@ -1,0 +1,373 @@
+#!/usr/bin/env python3
+"""
+Generate realistic test scenarios with 96 price items (15-min resolution, 24 hours)
+and visualize the results with bar charts showing selected vs non-selected items.
+"""
+
+import os
+from decimal import Decimal
+from pathlib import Path
+
+import matplotlib
+
+matplotlib.use("Agg")  # Use non-interactive backend
+import matplotlib.pyplot as plt
+import numpy as np
+
+from spot_planner import get_cheapest_periods
+
+
+def generate_realistic_daily_pattern() -> list[Decimal]:
+    """
+    Generate a realistic daily electricity price pattern (96 items = 24 hours * 4).
+    
+    Typical pattern:
+    - Night (00:00-06:00): Low prices
+    - Morning (06:00-09:00): Rising prices, morning peak
+    - Day (09:00-17:00): Moderate to high prices
+    - Evening (17:00-21:00): Peak prices
+    - Night (21:00-24:00): Decreasing prices
+    """
+    prices = []
+    
+    # 00:00-06:00 (0-23): Night, very cheap
+    for _ in range(24):
+        # Add some variation: 0.02-0.04
+        price = Decimal(str(np.random.uniform(0.02, 0.04)))
+        prices.append(price)
+    
+    # 06:00-09:00 (24-35): Morning, rising prices
+    for i in range(12):
+        # Rise from 0.05 to 0.15
+        price = Decimal(str(np.random.uniform(0.05 + i * 0.008, 0.15)))
+        prices.append(price)
+    
+    # 09:00-12:00 (36-47): Day, moderate-high
+    for _ in range(12):
+        price = Decimal(str(np.random.uniform(0.10, 0.18)))
+        prices.append(price)
+    
+    # 12:00-17:00 (48-67): Afternoon, moderate
+    for _ in range(20):
+        price = Decimal(str(np.random.uniform(0.08, 0.14)))
+        prices.append(price)
+    
+    # 17:00-21:00 (68-83): Evening peak, expensive
+    for i in range(16):
+        # Peak around 19:00
+        peak_factor = 1.0 - abs(i - 8) / 8.0
+        price = Decimal(str(np.random.uniform(0.15 + peak_factor * 0.10, 0.25)))
+        prices.append(price)
+    
+    # 21:00-24:00 (84-95): Night, decreasing
+    for i in range(12):
+        # Decrease from 0.12 to 0.03
+        price = Decimal(str(np.random.uniform(0.03, 0.12 - i * 0.007)))
+        prices.append(price)
+    
+    return prices
+
+
+def generate_cheap_day_pattern() -> list[Decimal]:
+    """Generate a day with mostly cheap prices (windy/sunny day)."""
+    prices = []
+    for _ in range(96):
+        # Mostly cheap with occasional spikes
+        if np.random.random() < 0.15:  # 15% chance of expensive
+            price = Decimal(str(np.random.uniform(0.15, 0.25)))
+        else:
+            price = Decimal(str(np.random.uniform(0.01, 0.08)))
+        prices.append(price)
+    return prices
+
+
+def generate_expensive_day_pattern() -> list[Decimal]:
+    """Generate a day with mostly expensive prices (cold winter day, low renewables)."""
+    prices = []
+    for _ in range(96):
+        # Mostly expensive with occasional cheap periods
+        if np.random.random() < 0.2:  # 20% chance of cheap
+            price = Decimal(str(np.random.uniform(0.01, 0.05)))
+        else:
+            price = Decimal(str(np.random.uniform(0.12, 0.30)))
+        prices.append(price)
+    return prices
+
+
+def generate_volatile_day_pattern() -> list[Decimal]:
+    """Generate a day with high price volatility."""
+    prices = []
+    for _ in range(96):
+        # High volatility: random between very cheap and very expensive
+        price = Decimal(str(np.random.uniform(0.01, 0.30)))
+        prices.append(price)
+    return prices
+
+
+def generate_peak_valley_pattern() -> list[Decimal]:
+    """Generate a clear peak-valley pattern."""
+    prices = []
+    for i in range(96):
+        # Create clear valleys at night, peaks during day
+        hour = i / 4.0
+        if 2 <= hour <= 6 or 22 <= hour <= 24:
+            # Night valleys: very cheap
+            price = Decimal(str(np.random.uniform(0.01, 0.03)))
+        elif 8 <= hour <= 10 or 17 <= hour <= 19:
+            # Peak hours: expensive
+            price = Decimal(str(np.random.uniform(0.20, 0.30)))
+        else:
+            # Moderate
+            price = Decimal(str(np.random.uniform(0.05, 0.15)))
+        prices.append(price)
+    return prices
+
+
+def visualize_scenario(
+    prices: list[Decimal],
+    selected_indices: list[int],
+    title: str,
+    filename: str,
+    output_dir: Path,
+    low_price_threshold: Decimal,
+    min_selections: int,
+    min_consecutive_periods: int,
+    max_gap_between_periods: int,
+    max_gap_from_start: int,
+):
+    """Create a bar chart visualization of selected vs non-selected items."""
+    n = len(prices)
+    hours = np.arange(n) / 4.0  # Convert 15-min intervals to hours
+    
+    # Convert prices to float for plotting
+    price_values = [float(p) for p in prices]
+    
+    # Create figure
+    fig, ax = plt.subplots(figsize=(16, 6))
+    
+    # Create arrays for selected and non-selected
+    selected_prices = []
+    non_selected_prices = []
+    selected_hours = []
+    non_selected_hours = []
+    
+    for i in range(n):
+        if i in selected_indices:
+            selected_prices.append(price_values[i])
+            selected_hours.append(hours[i])
+        else:
+            non_selected_prices.append(price_values[i])
+            non_selected_hours.append(hours[i])
+    
+    # Plot non-selected items in light gray
+    if non_selected_hours:
+        ax.bar(
+            non_selected_hours,
+            non_selected_prices,
+            width=0.25,
+            color="lightgray",
+            alpha=0.6,
+            label="Not Selected",
+            edgecolor="gray",
+            linewidth=0.5,
+        )
+    
+    # Plot selected items in green
+    if selected_hours:
+        ax.bar(
+            selected_hours,
+            selected_prices,
+            width=0.25,
+            color="green",
+            alpha=0.8,
+            label="Selected",
+            edgecolor="darkgreen",
+            linewidth=0.5,
+        )
+    
+    # Add threshold line
+    ax.axhline(
+        y=float(low_price_threshold),
+        color="red",
+        linestyle="--",
+        linewidth=1.5,
+        alpha=0.7,
+        label=f"Threshold ({low_price_threshold})",
+    )
+    
+    # Formatting
+    ax.set_xlabel("Time (hours)", fontsize=12)
+    ax.set_ylabel("Price (€/kWh)", fontsize=12)
+    ax.set_title(
+        f"{title}\n"
+        f"Selected: {len(selected_indices)}/{n} periods | "
+        f"Min consecutive: {min_consecutive_periods} | "
+        f"Max gap: {max_gap_between_periods}",
+        fontsize=13,
+        fontweight="bold",
+    )
+    ax.legend(loc="upper right", fontsize=10)
+    ax.grid(True, alpha=0.3, linestyle="--")
+    
+    # Set x-axis to show hours
+    ax.set_xticks(np.arange(0, 25, 2))
+    ax.set_xlim(-0.5, 24.5)
+    
+    # Add hour markers
+    for hour in range(0, 25, 6):
+        ax.axvline(x=hour, color="black", linestyle=":", alpha=0.2, linewidth=0.5)
+    
+    plt.tight_layout()
+    
+    # Save figure
+    output_path = output_dir / filename
+    plt.savefig(output_path, dpi=150, bbox_inches="tight")
+    plt.close()
+    
+    print(f"Saved: {output_path}")
+
+
+def main():
+    """Generate test scenarios and visualize results."""
+    # Create output directory
+    output_dir = Path("visualization_results")
+    output_dir.mkdir(exist_ok=True)
+    
+    # Test scenarios
+    scenarios = [
+        {
+            "name": "realistic_daily",
+            "generator": generate_realistic_daily_pattern,
+            "params": {
+                "low_price_threshold": Decimal("0.10"),
+                "min_selections": 24,
+                "min_consecutive_periods": 4,
+                "max_gap_between_periods": 20,
+                "max_gap_from_start": 10,
+            },
+        },
+        {
+            "name": "realistic_daily_tight",
+            "generator": generate_realistic_daily_pattern,
+            "params": {
+                "low_price_threshold": Decimal("0.10"),
+                "min_selections": 32,
+                "min_consecutive_periods": 6,
+                "max_gap_between_periods": 20,
+                "max_gap_from_start": 10,
+            },
+        },
+        {
+            "name": "cheap_day",
+            "generator": generate_cheap_day_pattern,
+            "params": {
+                "low_price_threshold": Decimal("0.08"),
+                "min_selections": 20,
+                "min_consecutive_periods": 4,
+                "max_gap_between_periods": 20,
+                "max_gap_from_start": 10,
+            },
+        },
+        {
+            "name": "expensive_day",
+            "generator": generate_expensive_day_pattern,
+            "params": {
+                "low_price_threshold": Decimal("0.12"),
+                "min_selections": 16,
+                "min_consecutive_periods": 4,
+                "max_gap_between_periods": 20,
+                "max_gap_from_start": 10,
+            },
+        },
+        {
+            "name": "volatile_day",
+            "generator": generate_volatile_day_pattern,
+            "params": {
+                "low_price_threshold": Decimal("0.10"),
+                "min_selections": 24,
+                "min_consecutive_periods": 3,
+                "max_gap_between_periods": 20,
+                "max_gap_from_start": 10,
+            },
+        },
+        {
+            "name": "peak_valley",
+            "generator": generate_peak_valley_pattern,
+            "params": {
+                "low_price_threshold": Decimal("0.10"),
+                "min_selections": 28,
+                "min_consecutive_periods": 4,
+                "max_gap_between_periods": 20,
+                "max_gap_from_start": 10,
+            },
+        },
+        {
+            "name": "realistic_conservative",
+            "generator": generate_realistic_daily_pattern,
+            "params": {
+                "low_price_threshold": Decimal("0.10"),
+                "min_selections": 24,
+                "min_consecutive_periods": 4,
+                "max_gap_between_periods": 20,
+                "max_gap_from_start": 10,
+                "aggressive": False,  # Conservative mode
+            },
+        },
+    ]
+    
+    print(f"Generating {len(scenarios)} test scenarios...")
+    print(f"Output directory: {output_dir.absolute()}\n")
+    
+    for i, scenario in enumerate(scenarios, 1):
+        print(f"Scenario {i}/{len(scenarios)}: {scenario['name']}")
+        
+        # Generate prices
+        prices = scenario["generator"]()
+        
+        # Get parameters
+        params = scenario["params"].copy()
+        aggressive = params.pop("aggressive", True)
+        
+        try:
+            # Run algorithm
+            selected = get_cheapest_periods(
+                prices=prices,
+                aggressive=aggressive,
+                **params,
+            )
+            
+            # Create visualization
+            title = scenario["name"].replace("_", " ").title()
+            filename = f"{scenario['name']}.png"
+            
+            visualize_scenario(
+                prices=prices,
+                selected_indices=selected,
+                title=title,
+                filename=filename,
+                output_dir=output_dir,
+                low_price_threshold=params["low_price_threshold"],
+                min_selections=params["min_selections"],
+                min_consecutive_periods=params["min_consecutive_periods"],
+                max_gap_between_periods=params["max_gap_between_periods"],
+                max_gap_from_start=params["max_gap_from_start"],
+            )
+            
+            # Print summary
+            total_cost = sum(prices[i] for i in selected)
+            avg_cost = total_cost / len(selected) if selected else Decimal(0)
+            print(
+                f"  Selected {len(selected)} periods, "
+                f"Total cost: {total_cost:.2f}, "
+                f"Avg cost: {avg_cost:.4f}\n"
+            )
+            
+        except Exception as e:
+            print(f"  ERROR: {e}\n")
+    
+    print(f"\nAll visualizations saved to: {output_dir.absolute()}")
+
+
+if __name__ == "__main__":
+    main()
+

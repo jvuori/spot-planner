@@ -8,7 +8,10 @@ authors = [
 ]
 license = { text = "MIT" }
 requires-python = ">=3.10"
-dependencies = []
+dependencies = [
+    "matplotlib>=3.10.7",
+    "numpy>=2.2.6",
+]
 keywords = ["spot-pricing", "optimization", "algorithm", "cost-analysis", "time-series"]
 classifiers = [
     "Development Status :: 4 - Beta",
