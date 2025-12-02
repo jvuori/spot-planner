@@ -5,8 +5,9 @@ This directory contains bar chart visualizations of the spot planner algorithm r
 ## Generated Visualizations
 
 ### 1. `realistic_daily.png`
+
 - **Pattern**: Realistic daily electricity price pattern
-- **Parameters**: 
+- **Parameters**:
   - Threshold: 0.10 €/kWh
   - Min selections: 24 periods (6 hours)
   - Min consecutive: 4 periods (1 hour)
@@ -14,6 +15,7 @@ This directory contains bar chart visualizations of the spot planner algorithm r
 - **Result**: 69 periods selected, avg cost: 0.0872 €/kWh
 
 ### 2. `realistic_daily_tight.png`
+
 - **Pattern**: Realistic daily pattern with tighter constraints
 - **Parameters**:
   - Threshold: 0.10 €/kWh
@@ -23,6 +25,7 @@ This directory contains bar chart visualizations of the spot planner algorithm r
 - **Result**: 84 periods selected, avg cost: 0.0960 €/kWh
 
 ### 3. `cheap_day.png`
+
 - **Pattern**: Day with mostly cheap prices (windy/sunny day)
 - **Parameters**:
   - Threshold: 0.08 €/kWh
@@ -32,6 +35,7 @@ This directory contains bar chart visualizations of the spot planner algorithm r
 - **Result**: 49 periods selected, avg cost: 0.0422 €/kWh
 
 ### 4. `expensive_day.png`
+
 - **Pattern**: Day with mostly expensive prices (cold winter, low renewables)
 - **Parameters**:
   - Threshold: 0.12 €/kWh
@@ -41,6 +45,7 @@ This directory contains bar chart visualizations of the spot planner algorithm r
 - **Result**: 29 periods selected, avg cost: 0.1173 €/kWh
 
 ### 5. `volatile_day.png`
+
 - **Pattern**: High price volatility throughout the day
 - **Parameters**:
   - Threshold: 0.10 €/kWh
@@ -50,6 +55,7 @@ This directory contains bar chart visualizations of the spot planner algorithm r
 - **Result**: 38 periods selected, avg cost: 0.1024 €/kWh
 
 ### 6. `peak_valley.png`
+
 - **Pattern**: Clear peak-valley pattern (cheap nights, expensive peaks)
 - **Parameters**:
   - Threshold: 0.10 €/kWh
@@ -59,6 +65,7 @@ This directory contains bar chart visualizations of the spot planner algorithm r
 - **Result**: 76 periods selected, avg cost: 0.0863 €/kWh
 
 ### 7. `realistic_conservative.png`
+
 - **Pattern**: Realistic daily pattern using conservative mode
 - **Parameters**:
   - Threshold: 0.10 €/kWh
@@ -90,4 +97,3 @@ To regenerate with different parameters or patterns, edit `visualize_results.py`
 ```bash
 uv run python visualize_results.py
 ```
-
