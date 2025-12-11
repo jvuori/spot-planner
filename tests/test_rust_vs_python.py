@@ -9,11 +9,8 @@ from decimal import Decimal
 
 import pytest
 
-from spot_planner.main import (
-    _get_cheapest_periods_python,
-    _is_valid_combination,
-    get_cheapest_periods,
-)
+from spot_planner.brute_force import _is_valid_combination, get_cheapest_periods_python
+from spot_planner.main import get_cheapest_periods
 
 
 def _validate_result_and_get_avg_cost(
@@ -26,10 +23,10 @@ def _validate_result_and_get_avg_cost(
     """Validate a result and return (is_valid, average_cost)."""
     if not result:
         return False, Decimal("0")
-    
+
     # Convert to combination format for validation
     combination = tuple((i, prices[i]) for i in result)
-    
+
     # Validate the combination
     is_valid = _is_valid_combination(
         combination,
@@ -38,11 +35,11 @@ def _validate_result_and_get_avg_cost(
         max_gap_from_start,
         len(prices),
     )
-    
+
     # Calculate average cost
     total_cost = sum(prices[i] for i in result)
     avg_cost = total_cost / len(result) if result else Decimal("0")
-    
+
     return is_valid, avg_cost
 
 
@@ -58,12 +55,20 @@ def _assert_results_equivalent(
     """Assert that both results are valid and have equivalent average costs."""
     # Validate both results
     rust_valid, rust_avg_cost = _validate_result_and_get_avg_cost(
-        rust_result, prices, min_consecutive_periods, max_gap_between_periods, max_gap_from_start
+        rust_result,
+        prices,
+        min_consecutive_periods,
+        max_gap_between_periods,
+        max_gap_from_start,
     )
     python_valid, python_avg_cost = _validate_result_and_get_avg_cost(
-        python_result, prices, min_consecutive_periods, max_gap_between_periods, max_gap_from_start
+        python_result,
+        prices,
+        min_consecutive_periods,
+        max_gap_between_periods,
+        max_gap_from_start,
     )
-    
+
     # Both should be valid
     assert rust_valid, (
         f"Rust result is invalid for scenario '{scenario_name}':\n"
@@ -79,24 +84,25 @@ def _assert_results_equivalent(
         f"Max gap between periods: {max_gap_between_periods}\n"
         f"Max gap from start: {max_gap_from_start}"
     )
-    
+
     # Both results are valid, so they're both acceptable
     # If they differ, that's okay - it just means there are multiple valid solutions
     # We only fail if one is invalid or if they have significantly different costs
     # (which might indicate a bug, but small differences are acceptable)
-    
+
     # If results are identical, they're equivalent
     if rust_result == python_result:
         return
-    
+
     # If results differ, check if costs are similar (within tolerance)
     cost_diff = abs(rust_avg_cost - python_avg_cost)
     tolerance = Decimal("0.01")  # Allow small differences due to optimization choices
-    
+
     if cost_diff > tolerance:
         # If costs differ significantly, warn but don't fail if both are valid
         # This might indicate a difference in optimization, but both are valid solutions
         import warnings
+
         warnings.warn(
             f"Scenario '{scenario_name}' has different results with different costs:\n"
             f"Rust result: {rust_result} (avg cost: {rust_avg_cost})\n"
@@ -104,7 +110,7 @@ def _assert_results_equivalent(
             f"Cost difference: {cost_diff} (tolerance: {tolerance})\n"
             f"Both results are valid, but costs differ significantly."
         )
-    
+
     # Both results are valid, so they're both acceptable
     # (We already validated both are valid above)
 
@@ -418,7 +424,7 @@ class TestRustVsPython:
                 max_gap_between_periods,
                 max_gap_from_start,
             )
-            python_result = _get_cheapest_periods_python(
+            python_result = get_cheapest_periods_python(
                 prices,
                 low_price_threshold,
                 min_selections,
@@ -443,7 +449,7 @@ class TestRustVsPython:
             # The main function (which calls Rust) should raise the same error as Python fallback
             # But Python fallback might not have the same validation, so we need to check both
             try:
-                python_result = _get_cheapest_periods_python(
+                python_result = get_cheapest_periods_python(
                     prices,
                     low_price_threshold,
                     min_selections,
@@ -529,7 +535,7 @@ class TestRustVsPython:
                 max_gap_between_periods,
                 max_gap_from_start,
             )
-            python_result = _get_cheapest_periods_python(
+            python_result = get_cheapest_periods_python(
                 prices,
                 low_price_threshold,
                 min_selections,
@@ -553,7 +559,7 @@ class TestRustVsPython:
             # The main function (which calls Rust) should raise the same error as Python fallback
             # But Python fallback might not have the same validation, so we need to check both
             try:
-                python_result = _get_cheapest_periods_python(
+                python_result = get_cheapest_periods_python(
                     prices,
                     low_price_threshold,
                     min_selections,
@@ -605,7 +611,7 @@ class TestRustVsPython:
                 max_gap_between_periods,
                 max_gap_from_start,
             )
-            python_result = _get_cheapest_periods_python(
+            python_result = get_cheapest_periods_python(
                 prices,
                 low_price_threshold,
                 min_selections,
@@ -630,7 +636,7 @@ class TestRustVsPython:
             # The main function (which calls Rust) should raise the same error as Python fallback
             # But Python fallback might not have the same validation, so we need to check both
             try:
-                python_result = _get_cheapest_periods_python(
+                python_result = get_cheapest_periods_python(
                     prices,
                     low_price_threshold,
                     min_selections,
@@ -677,7 +683,7 @@ class TestRustVsPython:
                     max_gap_between_periods,
                     max_gap_from_start,
                 )
-                python_result = _get_cheapest_periods_python(
+                python_result = get_cheapest_periods_python(
                     prices,
                     low_price_threshold,
                     min_selections,
@@ -701,7 +707,7 @@ class TestRustVsPython:
             except ValueError as e:
                 # Both implementations should raise the same error
                 with pytest.raises(ValueError, match=str(e)):
-                    _get_cheapest_periods_python(
+                    get_cheapest_periods_python(
                         prices,
                         low_price_threshold,
                         min_selections,
@@ -739,7 +745,7 @@ class TestRustVsPython:
             max_gap_between_periods,
             max_gap_from_start,
         )
-        python_result = _get_cheapest_periods_python(
+        python_result = get_cheapest_periods_python(
             base_prices,
             low_price_threshold,
             min_selections,
@@ -772,7 +778,7 @@ class TestRustVsPython:
         rust_result = get_cheapest_periods(
             high_precision_prices, low_price_threshold, 2, 1, 1, 1
         )
-        python_result = _get_cheapest_periods_python(
+        python_result = get_cheapest_periods_python(
             high_precision_prices, low_price_threshold, 2, 1, 1, 1
         )
 
@@ -827,7 +833,7 @@ class TestRustVsPython:
             max_gap_between_periods,
             max_gap_from_start,
         )
-        python_result = _get_cheapest_periods_python(
+        python_result = get_cheapest_periods_python(
             prices,
             low_price_threshold,
             min_selections,
@@ -877,10 +883,10 @@ class TestRustVsPython:
         avg_cost = total_cost / len(rust_result)
         cheap_count = sum(1 for i in rust_result if prices[i] <= low_price_threshold)
 
-        print(f"\nOriginal issue scenario validation:")
+        print("\nOriginal issue scenario validation:")
         print(f"Result: {rust_result}")
         print(f"First 3 items selected: {first_three_selected}")
         print(f"Total cost: {total_cost}")
         print(f"Average cost: {avg_cost:.3f}")
         print(f"Cheap items: {cheap_count}/{len(rust_result)}")
-        print(f"✓ Both implementations work correctly!")
+        print("✓ Both implementations work correctly!")

@@ -8,13 +8,10 @@ The extended algorithm uses a two-phase approach:
 
 from decimal import Decimal
 
-import pytest
-
 from spot_planner import get_cheapest_periods
-from spot_planner.main import (
-    _ChunkBoundaryState,
+from spot_planner.two_phase import (
+    ChunkBoundaryState,
     _calculate_chunk_boundary_state,
-    _get_cheapest_periods_extended,
     _repair_selection,
     _validate_full_selection,
 )
@@ -162,6 +159,7 @@ class TestBoundaryStateCalculation:
 
         state = _calculate_chunk_boundary_state(chunk_selected, chunk_length)
 
+        assert isinstance(state, ChunkBoundaryState)
         assert state.ended_with_selected is True
         assert state.trailing_selected_count == 3  # 7, 8, 9 are consecutive at end
         assert state.trailing_unselected_count == 0
@@ -213,7 +211,9 @@ class TestConstraintsAcrossBoundaries:
         sorted_result = sorted(result)
         for i in range(1, len(sorted_result)):
             gap = sorted_result[i] - sorted_result[i - 1] - 1
-            assert gap <= 20, f"Gap of {gap} exceeds max of 20 between {sorted_result[i-1]} and {sorted_result[i]}"
+            assert gap <= 20, (
+                f"Gap of {gap} exceeds max of 20 between {sorted_result[i - 1]} and {sorted_result[i]}"
+            )
 
     def test_min_consecutive_periods_across_chunks(self):
         """Test that min_consecutive_periods blocks are valid across entire sequence."""
@@ -236,12 +236,16 @@ class TestConstraintsAcrossBoundaries:
                 block_length += 1
             else:
                 # End of block
-                assert block_length >= 4, f"Block of length {block_length} is less than min 4"
+                assert block_length >= 4, (
+                    f"Block of length {block_length} is less than min 4"
+                )
                 block_length = 1
 
         # Check final block (only if not at the end of sequence)
         if sorted_result[-1] < 95:  # Not at the very end
-            assert block_length >= 4, f"Final block of length {block_length} is less than min 4"
+            assert block_length >= 4, (
+                f"Final block of length {block_length} is less than min 4"
+            )
 
 
 class TestRepairSelection:
@@ -342,9 +346,7 @@ class TestRealWorldScenarios:
         assert len(result) >= 24
 
         # Verify result is valid
-        assert _validate_full_selection(
-            result, 96, 2, 8, 4
-        ), "Result should be valid"
+        assert _validate_full_selection(result, 96, 2, 8, 4), "Result should be valid"
 
         # Most selections should be during cheap hours (0-5, 21-23)
         cheap_hours = set()
@@ -370,9 +372,9 @@ class TestRealWorldScenarios:
             )
 
             assert len(result) >= length // 4
-            assert _validate_full_selection(
-                result, length, 2, 5, 3
-            ), f"Result for length {length} should be valid"
+            assert _validate_full_selection(result, length, 2, 5, 3), (
+                f"Result for length {length} should be valid"
+            )
 
 
 class TestEdgeCases:
@@ -552,7 +554,9 @@ class TestLookaheadOptimization:
 
         # With good look-ahead, we should minimize expensive selections
         # Perfect solution would have 0-6 expensive items depending on constraints
-        assert expensive_count < 6, f"Too many expensive items selected: {expensive_count}"
+        assert expensive_count < 6, (
+            f"Too many expensive items selected: {expensive_count}"
+        )
 
     def test_lookahead_with_consecutive_block_spanning_chunks(self):
         """
@@ -627,7 +631,4 @@ class TestLookaheadOptimization:
         cheap_chunk2 = sum(1 for i in result if 24 <= i < 40)
 
         # Should prefer cheap items
-        assert cheap_chunk1_end + cheap_chunk2 >= 4, (
-            "Should select from cheap regions"
-        )
-
+        assert cheap_chunk1_end + cheap_chunk2 >= 4, "Should select from cheap regions"

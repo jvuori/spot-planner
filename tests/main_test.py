@@ -2,7 +2,8 @@ from decimal import Decimal
 
 import pytest
 
-from spot_planner.main import _is_valid_combination, get_cheapest_periods
+from spot_planner.brute_force import _is_valid_combination
+from spot_planner.main import get_cheapest_periods
 
 PRICE_DATA = [
     Decimal("50"),  # 0
@@ -27,7 +28,11 @@ def test_min_selections_is_same_as_for_low_price_threshold():
         max_gap_from_start=3,
     )
     # Algorithm selects cheapest items below threshold
-    assert set(periods) == {3, 4, 5}  # Indices 3, 4, 5 with prices 20, 10, 20 (all <= 20)
+    assert set(periods) == {
+        3,
+        4,
+        5,
+    }  # Indices 3, 4, 5 with prices 20, 10, 20 (all <= 20)
 
 
 def test_min_selections_is_greater_than_for_low_price_threshold():
@@ -40,7 +45,9 @@ def test_min_selections_is_greater_than_for_low_price_threshold():
         max_gap_from_start=3,
     )
     # Algorithm selects cheapest items below threshold
-    assert periods == [3, 4, 5]  # Indices 3, 4, 5 with prices 20, 10, 20 (only index 4 <= 10, but algorithm selects cheapest 3)
+    assert (
+        periods == [3, 4, 5]
+    )  # Indices 3, 4, 5 with prices 20, 10, 20 (only index 4 <= 10, but algorithm selects cheapest 3)
 
 
 def test_min_selections_is_less_than_for_min_consecutive_periods():
@@ -225,46 +232,57 @@ def test_min_consecutive_periods_ending_at_last_price_item():
     # Selection: [3, 4] with min_consecutive_periods=3
     # Since index 4 is the last item, the block [3, 4] (length 2) should be valid even though 2 < 3
     combination = tuple([(3, Decimal("40")), (4, Decimal("50"))])
-    assert _is_valid_combination(
-        combination,
-        min_consecutive_periods=3,
-        max_gap_between_periods=100,
-        max_gap_from_start=100,
-        full_length=5,  # Last index is 4, which equals full_length - 1
-    ) is True
+    assert (
+        _is_valid_combination(
+            combination,
+            min_consecutive_periods=3,
+            max_gap_between_periods=100,
+            max_gap_from_start=100,
+            full_length=5,  # Last index is 4, which equals full_length - 1
+        )
+        is True
+    )
 
     # Test case 2: Selection NOT ending at last price item with short consecutive block should be invalid
     # Prices: [10, 20, 30, 40, 50] (indices 0-4)
     # Selection: [2, 3] with min_consecutive_periods=3
     # Since index 3 is NOT the last item, the block [2, 3] (length 2) should be invalid
     combination = tuple([(2, Decimal("30")), (3, Decimal("40"))])
-    assert _is_valid_combination(
-        combination,
-        min_consecutive_periods=3,
-        max_gap_between_periods=100,
-        max_gap_from_start=100,
-        full_length=5,  # Last index is 3, which is NOT full_length - 1
-    ) is False
+    assert (
+        _is_valid_combination(
+            combination,
+            min_consecutive_periods=3,
+            max_gap_between_periods=100,
+            max_gap_from_start=100,
+            full_length=5,  # Last index is 3, which is NOT full_length - 1
+        )
+        is False
+    )
 
     # Test case 3: Selection with multiple blocks, last block ending at last price item
     # Prices: [10, 20, 30, 40, 50, 60] (indices 0-5)
     # Selection: [0, 1, 2, 4, 5] with min_consecutive_periods=3
     # First block [0, 1, 2] has length 3 >= 3, so valid
     # Last block [4, 5] has length 2 < 3, but index 5 is the last item, so should be valid
-    combination = tuple([
-        (0, Decimal("10")),
-        (1, Decimal("20")),
-        (2, Decimal("30")),
-        (4, Decimal("50")),
-        (5, Decimal("60")),
-    ])
-    assert _is_valid_combination(
-        combination,
-        min_consecutive_periods=3,
-        max_gap_between_periods=100,
-        max_gap_from_start=100,
-        full_length=6,  # Last index is 5, which equals full_length - 1
-    ) is True
+    combination = tuple(
+        [
+            (0, Decimal("10")),
+            (1, Decimal("20")),
+            (2, Decimal("30")),
+            (4, Decimal("50")),
+            (5, Decimal("60")),
+        ]
+    )
+    assert (
+        _is_valid_combination(
+            combination,
+            min_consecutive_periods=3,
+            max_gap_between_periods=100,
+            max_gap_from_start=100,
+            full_length=6,  # Last index is 5, which equals full_length - 1
+        )
+        is True
+    )
 
     # Test case 4: Selection with multiple blocks, last block NOT ending at last price item
     # Prices: [10, 20, 30, 40, 50, 60] (indices 0-5)
@@ -275,19 +293,24 @@ def test_min_consecutive_periods_ending_at_last_price_item():
     # Selection: [0, 1, 2, 4] with min_consecutive_periods=3
     # First block [0, 1, 2] has length 3 >= 3, so valid
     # Last block [4] has length 1 < 3, and index 4 is NOT the last item (full_length=6), so should be invalid
-    combination = tuple([
-        (0, Decimal("10")),
-        (1, Decimal("20")),
-        (2, Decimal("30")),
-        (4, Decimal("50")),
-    ])
-    assert _is_valid_combination(
-        combination,
-        min_consecutive_periods=3,
-        max_gap_between_periods=100,
-        max_gap_from_start=100,
-        full_length=6,  # Last index is 4, which is NOT full_length - 1
-    ) is False
+    combination = tuple(
+        [
+            (0, Decimal("10")),
+            (1, Decimal("20")),
+            (2, Decimal("30")),
+            (4, Decimal("50")),
+        ]
+    )
+    assert (
+        _is_valid_combination(
+            combination,
+            min_consecutive_periods=3,
+            max_gap_between_periods=100,
+            max_gap_from_start=100,
+            full_length=6,  # Last index is 4, which is NOT full_length - 1
+        )
+        is False
+    )
 
 
 def test_get_cheapest_periods_with_ending_at_last_price():
