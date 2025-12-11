@@ -12,6 +12,98 @@ from dataclasses import dataclass
 from decimal import Decimal
 from typing import Sequence
 
+# Import the Rust implementation
+try:
+    from . import spot_planner as _rust_module
+
+    _RUST_AVAILABLE = True
+except ImportError:
+    _RUST_AVAILABLE = False
+
+# Import Python brute-force implementation
+from .brute_force import get_cheapest_periods_python
+
+
+def _get_cheapest_periods(
+    prices: Sequence[Decimal],
+    low_price_threshold: Decimal,
+    min_selections: int,
+    min_consecutive_periods: int,
+    max_gap_between_periods: int = 0,
+    max_gap_from_start: int = 0,
+    aggressive: bool = True,
+) -> list[int]:
+    """
+    Internal dispatcher that chooses between Rust and Python brute-force implementations.
+
+    This function validates input parameters and dispatches to either the Rust
+    implementation (if available) or the Python fallback.
+
+    Note: This function is only for sequences <= 28 items. For longer sequences,
+    use get_cheapest_periods_extended().
+    """
+    # Validate input parameters before calling either implementation
+    if not prices:
+        msg = "prices cannot be empty"
+        raise ValueError(msg)
+
+    if len(prices) > 28:
+        msg = "prices cannot contain more than 28 items"
+        raise ValueError(msg)
+
+    if min_selections <= 0:
+        msg = "min_selections must be greater than 0"
+        raise ValueError(msg)
+
+    if min_selections > len(prices):
+        msg = "min_selections cannot be greater than total number of items"
+        raise ValueError(msg)
+
+    if min_consecutive_periods <= 0:
+        msg = "min_consecutive_periods must be greater than 0"
+        raise ValueError(msg)
+
+    if min_consecutive_periods > min_selections:
+        msg = "min_consecutive_periods cannot be greater than min_selections"
+        raise ValueError(msg)
+
+    if max_gap_between_periods < 0:
+        msg = "max_gap_between_periods must be greater than or equal to 0"
+        raise ValueError(msg)
+
+    if max_gap_from_start < 0:
+        msg = "max_gap_from_start must be greater than or equal to 0"
+        raise ValueError(msg)
+
+    if max_gap_from_start > max_gap_between_periods:
+        msg = "max_gap_from_start must be less than or equal to max_gap_between_periods"
+        raise ValueError(msg)
+
+    if _RUST_AVAILABLE:
+        # Use Rust implementation - convert Decimal objects to strings
+        prices_str = [str(price) for price in prices]
+        low_price_threshold_str = str(low_price_threshold)
+        return _rust_module.get_cheapest_periods(
+            prices_str,
+            low_price_threshold_str,
+            min_selections,
+            min_consecutive_periods,
+            max_gap_between_periods,
+            max_gap_from_start,
+            aggressive,
+        )
+    else:
+        # Fallback to Python implementation
+        return get_cheapest_periods_python(
+            prices,
+            low_price_threshold,
+            min_selections,
+            min_consecutive_periods,
+            max_gap_between_periods,
+            max_gap_from_start,
+            aggressive,
+        )
+
 
 @dataclass
 class ChunkBoundaryState:
@@ -145,9 +237,6 @@ def _try_chunk_selection(
     aggressive: bool,
 ) -> list[int] | None:
     """Try to get a valid chunk selection, return None if not possible."""
-    # Import here to avoid circular import
-    from .main import _get_cheapest_periods
-
     try:
         return _get_cheapest_periods(
             chunk_prices,
@@ -636,9 +725,6 @@ def get_cheapest_periods_extended(
     # Ensure constraints are valid
     rough_min_consecutive = min(rough_min_consecutive, rough_min_selections)
     rough_max_gap_start = min(rough_max_gap_start, rough_max_gap)
-
-    # Import here to avoid circular import
-    from .main import _get_cheapest_periods
 
     # Get rough selection pattern
     try:

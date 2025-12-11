@@ -1,92 +1,8 @@
 from decimal import Decimal
 from typing import Sequence
 
-# Import the Rust implementation
-try:
-    from . import spot_planner as _rust_module
-
-    _RUST_AVAILABLE = True
-except ImportError:
-    _RUST_AVAILABLE = False
-
-# Import Python brute-force implementation
-from .brute_force import get_cheapest_periods_python
-
-
-def _get_cheapest_periods(
-    prices: Sequence[Decimal],
-    low_price_threshold: Decimal,
-    min_selections: int,
-    min_consecutive_periods: int,
-    max_gap_between_periods: int = 0,
-    max_gap_from_start: int = 0,
-    aggressive: bool = True,
-) -> list[int]:
-    # Validate input parameters before calling either implementation
-    if not prices:
-        msg = "prices cannot be empty"
-        raise ValueError(msg)
-
-    if len(prices) > 28:
-        msg = "prices cannot contain more than 28 items"
-        raise ValueError(msg)
-
-    if min_selections <= 0:
-        msg = "min_selections must be greater than 0"
-        raise ValueError(msg)
-
-    if min_selections > len(prices):
-        msg = "min_selections cannot be greater than total number of items"
-        raise ValueError(msg)
-
-    if min_consecutive_periods <= 0:
-        msg = "min_consecutive_periods must be greater than 0"
-        raise ValueError(msg)
-
-    if min_consecutive_periods > min_selections:
-        msg = "min_consecutive_periods cannot be greater than min_selections"
-        raise ValueError(msg)
-
-    if max_gap_between_periods < 0:
-        msg = "max_gap_between_periods must be greater than or equal to 0"
-        raise ValueError(msg)
-
-    if max_gap_from_start < 0:
-        msg = "max_gap_from_start must be greater than or equal to 0"
-        raise ValueError(msg)
-
-    if max_gap_from_start > max_gap_between_periods:
-        msg = "max_gap_from_start must be less than or equal to max_gap_between_periods"
-        raise ValueError(msg)
-
-    if _RUST_AVAILABLE:
-        # Use Rust implementation - convert Decimal objects to strings
-        prices_str = [str(price) for price in prices]
-        low_price_threshold_str = str(low_price_threshold)
-        return _rust_module.get_cheapest_periods(
-            prices_str,
-            low_price_threshold_str,
-            min_selections,
-            min_consecutive_periods,
-            max_gap_between_periods,
-            max_gap_from_start,
-            aggressive,
-        )
-    else:
-        # Fallback to Python implementation
-        return get_cheapest_periods_python(
-            prices,
-            low_price_threshold,
-            min_selections,
-            min_consecutive_periods,
-            max_gap_between_periods,
-            max_gap_from_start,
-            aggressive,
-        )
-
-
-# Import two-phase algorithm (must be after _get_cheapest_periods is defined)
-from .two_phase import get_cheapest_periods_extended
+# Import two-phase algorithm which handles both short and long sequences
+from .two_phase import _get_cheapest_periods, get_cheapest_periods_extended
 
 
 def get_cheapest_periods(
@@ -198,7 +114,7 @@ def get_cheapest_periods(
             aggressive,
         )
 
-    # Use direct brute-force for shorter sequences
+    # Use direct brute-force for shorter sequences (dispatched by two_phase module)
     return _get_cheapest_periods(
         prices,
         low_price_threshold,
