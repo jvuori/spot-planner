@@ -13,15 +13,19 @@ from decimal import Decimal
 from typing import Sequence
 
 # Import the Rust implementation
+# Note: The Rust extension module is part of the package itself, so we use
+# a relative import. This is an exception to the fully-qualified import rule
+# because compiled extensions that share the package name cannot be imported
+# using fully qualified syntax from within the package.
 try:
-    from . import spot_planner as _rust_module
+    from . import spot_planner as _rust_module  # type: ignore[import-untyped]
 
     _RUST_AVAILABLE = True
 except ImportError:
     _RUST_AVAILABLE = False
 
 # Import Python brute-force implementation
-from .brute_force import get_cheapest_periods_python
+from spot_planner import brute_force
 
 
 def _get_cheapest_periods(
@@ -94,7 +98,7 @@ def _get_cheapest_periods(
         )
     else:
         # Fallback to Python implementation
-        return get_cheapest_periods_python(
+        return brute_force.get_cheapest_periods_python(
             prices,
             low_price_threshold,
             min_selections,

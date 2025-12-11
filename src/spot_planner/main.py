@@ -2,7 +2,7 @@ from decimal import Decimal
 from typing import Sequence
 
 # Import two-phase algorithm which handles both short and long sequences
-from .two_phase import _get_cheapest_periods, get_cheapest_periods_extended
+from spot_planner import two_phase
 
 
 def get_cheapest_periods(
@@ -104,7 +104,7 @@ def get_cheapest_periods(
 
     # Use extended algorithm for longer sequences
     if len(prices) > 28:
-        return get_cheapest_periods_extended(
+        return two_phase.get_cheapest_periods_extended(
             prices,
             low_price_threshold,
             min_selections,
@@ -115,7 +115,7 @@ def get_cheapest_periods(
         )
 
     # Use direct brute-force for shorter sequences (dispatched by two_phase module)
-    return _get_cheapest_periods(
+    return two_phase._get_cheapest_periods(
         prices,
         low_price_threshold,
         min_selections,
