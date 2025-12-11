@@ -247,6 +247,43 @@ def main():
             },
         },
         {
+            "name": "custom_test_data",
+            "prices": [
+                Decimal('4.78'), Decimal('4.252'), Decimal('3.869'), Decimal('3.721'),
+                Decimal('3.792'), Decimal('3.697'), Decimal('3.593'), Decimal('3.476'),
+                Decimal('7.152'), Decimal('4.211'), Decimal('4.133'), Decimal('3.687'),
+                Decimal('4.084'), Decimal('3.875'), Decimal('3.66'), Decimal('3.503'),
+                Decimal('3.712'), Decimal('3.637'), Decimal('3.335'), Decimal('3.048'),
+                Decimal('2.896'), Decimal('3.182'), Decimal('3.131'), Decimal('3.119'),
+                Decimal('2.727'), Decimal('2.938'), Decimal('3.195'), Decimal('3.488'),
+                Decimal('2.6'), Decimal('3.028'), Decimal('3.559'), Decimal('4.321'),
+                Decimal('2.301'), Decimal('3.21'), Decimal('4.29'), Decimal('5.699'),
+                Decimal('4.5'), Decimal('6.147'), Decimal('8.161'), Decimal('9.924'),
+                Decimal('5.945'), Decimal('6.764'), Decimal('7.731'), Decimal('8.374'),
+                Decimal('7.501'), Decimal('7.962'), Decimal('9.852'), Decimal('10.999'),
+                Decimal('6.248'), Decimal('7.505'), Decimal('9.999'), Decimal('10.825'),
+                Decimal('8.566'), Decimal('8.603'), Decimal('8.221'), Decimal('8.346'),
+                Decimal('7.832'), Decimal('8.211'), Decimal('7.507'), Decimal('7.253'),
+                Decimal('11.3'), Decimal('11.517'), Decimal('12.154'), Decimal('13.057'),
+                Decimal('11.606'), Decimal('12.523'), Decimal('14.322'), Decimal('15.832'),
+                Decimal('12.529'), Decimal('13.219'), Decimal('14.048'), Decimal('14.923'),
+                Decimal('13.182'), Decimal('14.6'), Decimal('14.995'), Decimal('14.643'),
+                Decimal('15.967'), Decimal('16.106'), Decimal('15.394'), Decimal('15.005'),
+                Decimal('14.696'), Decimal('14.18'), Decimal('13.969'), Decimal('13.987'),
+                Decimal('14.071'), Decimal('13.576'), Decimal('13.501'), Decimal('12.638'),
+                Decimal('9.999'), Decimal('8.164'), Decimal('7.12'), Decimal('6.717'),
+                Decimal('7.925'), Decimal('10.565'), Decimal('10.636'), Decimal('9.747'),
+            ],
+            "params": {
+                "low_price_threshold": Decimal("4.665812749003984"),
+                "min_selections": 34,
+                "min_consecutive_periods": 4,
+                "max_gap_between_periods": 24,
+                "max_gap_from_start": 22,
+                "aggressive": False,
+            },
+        },
+        {
             "name": "realistic_daily_tight",
             "generator": generate_realistic_daily_pattern,
             "params": {
@@ -321,8 +358,11 @@ def main():
     for i, scenario in enumerate(scenarios, 1):
         print(f"Scenario {i}/{len(scenarios)}: {scenario['name']}")
         
-        # Generate prices
-        prices = scenario["generator"]()
+        # Get prices - either from generator or provided directly
+        if "prices" in scenario:
+            prices = scenario["prices"]
+        else:
+            prices = scenario["generator"]()
         
         # Get parameters
         params = scenario["params"].copy()

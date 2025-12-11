@@ -639,7 +639,10 @@ def _find_best_chunk_selection_with_lookahead(
         return sorted(sorted_by_price[:min_consecutive_periods])
 
     # With look-ahead: try multiple strategies and pick the best combined cost
-    candidates: list[tuple[list[int], Decimal]] = []  # (selection, total_cost)
+    # Store: (selection, cost_metric) where cost_metric depends on mode
+    # For aggressive: average cost
+    # For conservative: (cheap_count, total_cost) tuple for comparison
+    candidates: list[tuple[list[int], Decimal | tuple[int, Decimal]]] = []
 
     # Strategy 1: Standard selection (locally optimal)
     selection = _try_chunk_selection(
@@ -657,7 +660,16 @@ def _find_best_chunk_selection_with_lookahead(
         forced_cost = _estimate_forced_prefix_cost(
             next_chunk_prices, boundary, min_consecutive_periods
         )
-        candidates.append((selection, chunk_cost + forced_cost))
+        total_cost = chunk_cost + forced_cost
+        
+        if aggressive:
+            # Aggressive mode: use average cost
+            avg_cost = total_cost / Decimal(len(selection))
+            candidates.append((selection, avg_cost))
+        else:
+            # Conservative mode: use (cheap_count, total_cost)
+            cheap_count = sum(1 for i in selection if chunk_prices[i] <= low_price_threshold)
+            candidates.append((selection, (cheap_count, total_cost)))
 
     # Strategy 2: Try to end with a complete block (avoid forcing next chunk)
     # This means selecting items up to the end of the chunk
@@ -683,7 +695,12 @@ def _find_best_chunk_selection_with_lookahead(
                         (chunk_prices[i] for i in selection), Decimal(0)
                     )
                     # No forced cost since block is complete
-                    candidates.append((selection, complete_block_cost))
+                    if aggressive:
+                        avg_cost = complete_block_cost / Decimal(len(selection))
+                        candidates.append((selection, avg_cost))
+                    else:
+                        cheap_count = sum(1 for i in selection if chunk_prices[i] <= low_price_threshold)
+                        candidates.append((selection, (cheap_count, complete_block_cost)))
                     break
 
     # Strategy 3: Try ending with unselected items (gap at end)
@@ -713,7 +730,12 @@ def _find_best_chunk_selection_with_lookahead(
                     (chunk_prices[i] for i in selection), Decimal(0)
                 )
                 # No forced cost since we ended with unselected
-                candidates.append((selection, chunk_cost_val))
+                if aggressive:
+                    avg_cost = chunk_cost_val / Decimal(len(selection))
+                    candidates.append((selection, avg_cost))
+                else:
+                    cheap_count = sum(1 for i in selection if chunk_prices[i] <= low_price_threshold)
+                    candidates.append((selection, (cheap_count, chunk_cost_val)))
 
     # Strategy 4: Try to complete a min_consecutive block at the end
     # by selecting exactly min_consecutive_periods items at the end
@@ -735,7 +757,13 @@ def _find_best_chunk_selection_with_lookahead(
                 forced_cost = _estimate_forced_prefix_cost(
                     next_chunk_prices, boundary, min_consecutive_periods
                 )
-                candidates.append((selection, end_block_cost + forced_cost))
+                total_cost = end_block_cost + forced_cost
+                if aggressive:
+                    avg_cost = total_cost / Decimal(len(selection))
+                    candidates.append((selection, avg_cost))
+                else:
+                    cheap_count = sum(1 for i in selection if chunk_prices[i] <= low_price_threshold)
+                    candidates.append((selection, (cheap_count, total_cost)))
 
     # If no candidates, use fallback
     if not candidates:
@@ -754,7 +782,12 @@ def _find_best_chunk_selection_with_lookahead(
                 fallback_cost: Decimal = sum(
                     (chunk_prices[i] for i in selection), Decimal(0)
                 )
-                candidates.append((selection, fallback_cost))
+                if aggressive:
+                    avg_cost = fallback_cost / Decimal(len(selection))
+                    candidates.append((selection, avg_cost))
+                else:
+                    cheap_count = sum(1 for i in selection if chunk_prices[i] <= low_price_threshold)
+                    candidates.append((selection, (cheap_count, fallback_cost)))
                 break
 
     if not candidates:
@@ -764,10 +797,20 @@ def _find_best_chunk_selection_with_lookahead(
         last_resort_cost: Decimal = sum(
             (chunk_prices[i] for i in selection), Decimal(0)
         )
-        candidates.append((selection, last_resort_cost))
+        if aggressive:
+            avg_cost = last_resort_cost / Decimal(len(selection))
+            candidates.append((selection, avg_cost))
+        else:
+            cheap_count = sum(1 for i in selection if chunk_prices[i] <= low_price_threshold)
+            candidates.append((selection, (cheap_count, last_resort_cost)))
 
-    # Pick the candidate with lowest total cost
-    best_selection, _ = min(candidates, key=lambda x: x[1])
+    # Pick the best candidate based on mode
+    if aggressive:
+        # Aggressive mode: lowest average cost
+        best_selection, _ = min(candidates, key=lambda x: x[1])
+    else:
+        # Conservative mode: most cheap items, then lowest total cost
+        best_selection, _ = max(candidates, key=lambda x: (x[1][0], -x[1][1]))
     return best_selection
 
 
