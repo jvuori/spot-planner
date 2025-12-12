@@ -281,6 +281,10 @@ def _find_best_chunk_selection_with_lookahead(
     """
     chunk_len = len(chunk_prices)
 
+    # Special case: if target=0, return empty selection (skip this chunk)
+    if target == 0:
+        return []
+
     # If there's no next chunk, just find the best selection for this chunk
     if next_chunk_prices is None:
         result = _try_chunk_selection(
@@ -828,7 +832,24 @@ def get_cheapest_periods_extended(
 
         # Calculate target selections for this chunk
         target = chunk_selection_targets[chunk_idx]
-        target = max(target, min_consecutive_periods)  # At least min_consecutive
+        # For the first chunk, if target=0 and max_gap_from_start allows waiting
+        # until the next chunk, we can allow target=0 to skip expensive periods
+        if chunk_idx == 0 and target == 0:
+            # Check if we can wait until next chunk without violating max_gap_from_start
+            if chunk_idx + 1 < num_chunks:
+                next_chunk_start = (chunk_idx + 1) * MAX_CHUNK_SIZE
+                if next_chunk_start <= max_gap_from_start:
+                    # Can wait until next chunk - allow target=0
+                    target = 0
+                else:
+                    # Must select something in this chunk to satisfy max_gap_from_start
+                    target = max(target, min_consecutive_periods)
+            else:
+                # This is the last chunk, must select something
+                target = max(target, min_consecutive_periods)
+        else:
+            # For non-first chunks or when target > 0, enforce min_consecutive
+            target = max(target, min_consecutive_periods)  # At least min_consecutive
         target = max(target, forced_prefix_length)  # At least forced prefix
         target = min(target, chunk_len)  # Can't exceed chunk size
 

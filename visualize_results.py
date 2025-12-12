@@ -4,7 +4,6 @@ Generate realistic test scenarios with 96 price items (15-min resolution, 24 hou
 and visualize the results with bar charts showing selected vs non-selected items.
 """
 
-import os
 from decimal import Decimal
 from pathlib import Path
 
@@ -20,7 +19,7 @@ from spot_planner import get_cheapest_periods
 def generate_realistic_daily_pattern() -> list[Decimal]:
     """
     Generate a realistic daily electricity price pattern (96 items = 24 hours * 4).
-    
+
     Typical pattern:
     - Night (00:00-06:00): Low prices
     - Morning (06:00-09:00): Rising prices, morning peak
@@ -29,42 +28,42 @@ def generate_realistic_daily_pattern() -> list[Decimal]:
     - Night (21:00-24:00): Decreasing prices
     """
     prices = []
-    
+
     # 00:00-06:00 (0-23): Night, very cheap
     for _ in range(24):
         # Add some variation: 0.02-0.04
         price = Decimal(str(np.random.uniform(0.02, 0.04)))
         prices.append(price)
-    
+
     # 06:00-09:00 (24-35): Morning, rising prices
     for i in range(12):
         # Rise from 0.05 to 0.15
         price = Decimal(str(np.random.uniform(0.05 + i * 0.008, 0.15)))
         prices.append(price)
-    
+
     # 09:00-12:00 (36-47): Day, moderate-high
     for _ in range(12):
         price = Decimal(str(np.random.uniform(0.10, 0.18)))
         prices.append(price)
-    
+
     # 12:00-17:00 (48-67): Afternoon, moderate
     for _ in range(20):
         price = Decimal(str(np.random.uniform(0.08, 0.14)))
         prices.append(price)
-    
+
     # 17:00-21:00 (68-83): Evening peak, expensive
     for i in range(16):
         # Peak around 19:00
         peak_factor = 1.0 - abs(i - 8) / 8.0
         price = Decimal(str(np.random.uniform(0.15 + peak_factor * 0.10, 0.25)))
         prices.append(price)
-    
+
     # 21:00-24:00 (84-95): Night, decreasing
     for i in range(12):
         # Decrease from 0.12 to 0.03
         price = Decimal(str(np.random.uniform(0.03, 0.12 - i * 0.007)))
         prices.append(price)
-    
+
     return prices
 
 
@@ -138,19 +137,19 @@ def visualize_scenario(
     """Create a bar chart visualization of selected vs non-selected items."""
     n = len(prices)
     hours = np.arange(n) / 4.0  # Convert 15-min intervals to hours
-    
+
     # Convert prices to float for plotting
     price_values = [float(p) for p in prices]
-    
+
     # Create figure
     fig, ax = plt.subplots(figsize=(16, 6))
-    
+
     # Create arrays for selected and non-selected
     selected_prices = []
     non_selected_prices = []
     selected_hours = []
     non_selected_hours = []
-    
+
     for i in range(n):
         if i in selected_indices:
             selected_prices.append(price_values[i])
@@ -158,7 +157,7 @@ def visualize_scenario(
         else:
             non_selected_prices.append(price_values[i])
             non_selected_hours.append(hours[i])
-    
+
     # Plot non-selected items in light gray
     if non_selected_hours:
         ax.bar(
@@ -171,7 +170,7 @@ def visualize_scenario(
             edgecolor="gray",
             linewidth=0.5,
         )
-    
+
     # Plot selected items in green
     if selected_hours:
         ax.bar(
@@ -184,7 +183,7 @@ def visualize_scenario(
             edgecolor="darkgreen",
             linewidth=0.5,
         )
-    
+
     # Add threshold line
     ax.axhline(
         y=float(low_price_threshold),
@@ -194,7 +193,7 @@ def visualize_scenario(
         alpha=0.7,
         label=f"Threshold ({low_price_threshold})",
     )
-    
+
     # Formatting
     ax.set_xlabel("Time (hours)", fontsize=12)
     ax.set_ylabel("Price (€/kWh)", fontsize=12)
@@ -208,22 +207,22 @@ def visualize_scenario(
     )
     ax.legend(loc="upper right", fontsize=10)
     ax.grid(True, alpha=0.3, linestyle="--")
-    
+
     # Set x-axis to show hours
     ax.set_xticks(np.arange(0, 25, 2))
     ax.set_xlim(-0.5, 24.5)
-    
+
     # Add hour markers
     for hour in range(0, 25, 6):
         ax.axvline(x=hour, color="black", linestyle=":", alpha=0.2, linewidth=0.5)
-    
+
     plt.tight_layout()
-    
+
     # Save figure
     output_path = output_dir / filename
     plt.savefig(output_path, dpi=150, bbox_inches="tight")
     plt.close()
-    
+
     print(f"Saved: {output_path}")
 
 
@@ -232,7 +231,7 @@ def main():
     # Create output directory
     output_dir = Path("visualization_results")
     output_dir.mkdir(exist_ok=True)
-    
+
     # Test scenarios
     scenarios = [
         {
@@ -249,30 +248,102 @@ def main():
         {
             "name": "custom_test_data",
             "prices": [
-                Decimal('4.78'), Decimal('4.252'), Decimal('3.869'), Decimal('3.721'),
-                Decimal('3.792'), Decimal('3.697'), Decimal('3.593'), Decimal('3.476'),
-                Decimal('7.152'), Decimal('4.211'), Decimal('4.133'), Decimal('3.687'),
-                Decimal('4.084'), Decimal('3.875'), Decimal('3.66'), Decimal('3.503'),
-                Decimal('3.712'), Decimal('3.637'), Decimal('3.335'), Decimal('3.048'),
-                Decimal('2.896'), Decimal('3.182'), Decimal('3.131'), Decimal('3.119'),
-                Decimal('2.727'), Decimal('2.938'), Decimal('3.195'), Decimal('3.488'),
-                Decimal('2.6'), Decimal('3.028'), Decimal('3.559'), Decimal('4.321'),
-                Decimal('2.301'), Decimal('3.21'), Decimal('4.29'), Decimal('5.699'),
-                Decimal('4.5'), Decimal('6.147'), Decimal('8.161'), Decimal('9.924'),
-                Decimal('5.945'), Decimal('6.764'), Decimal('7.731'), Decimal('8.374'),
-                Decimal('7.501'), Decimal('7.962'), Decimal('9.852'), Decimal('10.999'),
-                Decimal('6.248'), Decimal('7.505'), Decimal('9.999'), Decimal('10.825'),
-                Decimal('8.566'), Decimal('8.603'), Decimal('8.221'), Decimal('8.346'),
-                Decimal('7.832'), Decimal('8.211'), Decimal('7.507'), Decimal('7.253'),
-                Decimal('11.3'), Decimal('11.517'), Decimal('12.154'), Decimal('13.057'),
-                Decimal('11.606'), Decimal('12.523'), Decimal('14.322'), Decimal('15.832'),
-                Decimal('12.529'), Decimal('13.219'), Decimal('14.048'), Decimal('14.923'),
-                Decimal('13.182'), Decimal('14.6'), Decimal('14.995'), Decimal('14.643'),
-                Decimal('15.967'), Decimal('16.106'), Decimal('15.394'), Decimal('15.005'),
-                Decimal('14.696'), Decimal('14.18'), Decimal('13.969'), Decimal('13.987'),
-                Decimal('14.071'), Decimal('13.576'), Decimal('13.501'), Decimal('12.638'),
-                Decimal('9.999'), Decimal('8.164'), Decimal('7.12'), Decimal('6.717'),
-                Decimal('7.925'), Decimal('10.565'), Decimal('10.636'), Decimal('9.747'),
+                Decimal("4.78"),
+                Decimal("4.252"),
+                Decimal("3.869"),
+                Decimal("3.721"),
+                Decimal("3.792"),
+                Decimal("3.697"),
+                Decimal("3.593"),
+                Decimal("3.476"),
+                Decimal("7.152"),
+                Decimal("4.211"),
+                Decimal("4.133"),
+                Decimal("3.687"),
+                Decimal("4.084"),
+                Decimal("3.875"),
+                Decimal("3.66"),
+                Decimal("3.503"),
+                Decimal("3.712"),
+                Decimal("3.637"),
+                Decimal("3.335"),
+                Decimal("3.048"),
+                Decimal("2.896"),
+                Decimal("3.182"),
+                Decimal("3.131"),
+                Decimal("3.119"),
+                Decimal("2.727"),
+                Decimal("2.938"),
+                Decimal("3.195"),
+                Decimal("3.488"),
+                Decimal("2.6"),
+                Decimal("3.028"),
+                Decimal("3.559"),
+                Decimal("4.321"),
+                Decimal("2.301"),
+                Decimal("3.21"),
+                Decimal("4.29"),
+                Decimal("5.699"),
+                Decimal("4.5"),
+                Decimal("6.147"),
+                Decimal("8.161"),
+                Decimal("9.924"),
+                Decimal("5.945"),
+                Decimal("6.764"),
+                Decimal("7.731"),
+                Decimal("8.374"),
+                Decimal("7.501"),
+                Decimal("7.962"),
+                Decimal("9.852"),
+                Decimal("10.999"),
+                Decimal("6.248"),
+                Decimal("7.505"),
+                Decimal("9.999"),
+                Decimal("10.825"),
+                Decimal("8.566"),
+                Decimal("8.603"),
+                Decimal("8.221"),
+                Decimal("8.346"),
+                Decimal("7.832"),
+                Decimal("8.211"),
+                Decimal("7.507"),
+                Decimal("7.253"),
+                Decimal("11.3"),
+                Decimal("11.517"),
+                Decimal("12.154"),
+                Decimal("13.057"),
+                Decimal("11.606"),
+                Decimal("12.523"),
+                Decimal("14.322"),
+                Decimal("15.832"),
+                Decimal("12.529"),
+                Decimal("13.219"),
+                Decimal("14.048"),
+                Decimal("14.923"),
+                Decimal("13.182"),
+                Decimal("14.6"),
+                Decimal("14.995"),
+                Decimal("14.643"),
+                Decimal("15.967"),
+                Decimal("16.106"),
+                Decimal("15.394"),
+                Decimal("15.005"),
+                Decimal("14.696"),
+                Decimal("14.18"),
+                Decimal("13.969"),
+                Decimal("13.987"),
+                Decimal("14.071"),
+                Decimal("13.576"),
+                Decimal("13.501"),
+                Decimal("12.638"),
+                Decimal("9.999"),
+                Decimal("8.164"),
+                Decimal("7.12"),
+                Decimal("6.717"),
+                Decimal("7.925"),
+                Decimal("10.565"),
+                Decimal("10.636"),
+                Decimal("9.747"),
             ],
             "params": {
                 "low_price_threshold": Decimal("4.665812749003984"),
@@ -350,24 +421,133 @@ def main():
                 "aggressive": False,  # Conservative mode
             },
         },
+        {
+            "name": "custom_conservative",
+            "prices": [
+                Decimal("11.606"),
+                Decimal("12.523"),
+                Decimal("14.322"),
+                Decimal("15.832"),
+                Decimal("12.529"),
+                Decimal("13.219"),
+                Decimal("14.048"),
+                Decimal("14.923"),
+                Decimal("13.182"),
+                Decimal("14.6"),
+                Decimal("14.995"),
+                Decimal("14.643"),
+                Decimal("15.967"),
+                Decimal("16.106"),
+                Decimal("15.394"),
+                Decimal("15.005"),
+                Decimal("14.696"),
+                Decimal("14.18"),
+                Decimal("13.969"),
+                Decimal("13.987"),
+                Decimal("14.071"),
+                Decimal("13.576"),
+                Decimal("13.501"),
+                Decimal("12.638"),
+                Decimal("9.999"),
+                Decimal("8.164"),
+                Decimal("7.12"),
+                Decimal("6.717"),
+                Decimal("7.925"),
+                Decimal("10.565"),
+                Decimal("10.636"),
+                Decimal("9.747"),
+                Decimal("11.489"),
+                Decimal("7.968"),
+                Decimal("6.598"),
+                Decimal("5.945"),
+                Decimal("10.0"),
+                Decimal("7.929"),
+                Decimal("7.108"),
+                Decimal("6.126"),
+                Decimal("8.994"),
+                Decimal("7.941"),
+                Decimal("7.52"),
+                Decimal("7.119"),
+                Decimal("8.994"),
+                Decimal("7.324"),
+                Decimal("6.743"),
+                Decimal("6.141"),
+                Decimal("6.191"),
+                Decimal("6.062"),
+                Decimal("5.209"),
+                Decimal("5.0"),
+                Decimal("5.263"),
+                Decimal("6.14"),
+                Decimal("5.001"),
+                Decimal("5.001"),
+                Decimal("4.393"),
+                Decimal("4.999"),
+                Decimal("4.829"),
+                Decimal("5.0"),
+                Decimal("6.658"),
+                Decimal("7.0"),
+                Decimal("7.0"),
+                Decimal("7.119"),
+                Decimal("7.119"),
+                Decimal("6.999"),
+                Decimal("6.999"),
+                Decimal("6.442"),
+                Decimal("8.105"),
+                Decimal("8.066"),
+                Decimal("7.509"),
+                Decimal("7.12"),
+                Decimal("9.873"),
+                Decimal("9.991"),
+                Decimal("9.999"),
+                Decimal("10.035"),
+                Decimal("11.0"),
+                Decimal("10.378"),
+                Decimal("9.872"),
+                Decimal("7.996"),
+                Decimal("10.762"),
+                Decimal("7.713"),
+                Decimal("7.689"),
+                Decimal("6.812"),
+                Decimal("7.889"),
+                Decimal("7.738"),
+                Decimal("7.712"),
+                Decimal("7.632"),
+                Decimal("10.348"),
+                Decimal("10.247"),
+                Decimal("10.249"),
+                Decimal("10.349"),
+                Decimal("10.347"),
+                Decimal("10.591"),
+                Decimal("10.72"),
+                Decimal("9.358"),
+            ],
+            "params": {
+                "low_price_threshold": Decimal("7.915812749003984"),
+                "min_selections": 40,
+                "min_consecutive_periods": 4,
+                "max_gap_between_periods": 24,
+                "max_gap_from_start": 20,
+                "aggressive": False,
+            },
+        },
     ]
-    
+
     print(f"Generating {len(scenarios)} test scenarios...")
     print(f"Output directory: {output_dir.absolute()}\n")
-    
+
     for i, scenario in enumerate(scenarios, 1):
         print(f"Scenario {i}/{len(scenarios)}: {scenario['name']}")
-        
+
         # Get prices - either from generator or provided directly
         if "prices" in scenario:
             prices = scenario["prices"]
         else:
             prices = scenario["generator"]()
-        
+
         # Get parameters
         params = scenario["params"].copy()
         aggressive = params.pop("aggressive", True)
-        
+
         try:
             # Run algorithm
             selected = get_cheapest_periods(
@@ -375,11 +555,11 @@ def main():
                 aggressive=aggressive,
                 **params,
             )
-            
+
             # Create visualization
             title = scenario["name"].replace("_", " ").title()
             filename = f"{scenario['name']}.png"
-            
+
             visualize_scenario(
                 prices=prices,
                 selected_indices=selected,
@@ -392,7 +572,7 @@ def main():
                 max_gap_between_periods=params["max_gap_between_periods"],
                 max_gap_from_start=params["max_gap_from_start"],
             )
-            
+
             # Print summary
             total_cost = sum(prices[i] for i in selected)
             avg_cost = total_cost / len(selected) if selected else Decimal(0)
@@ -401,13 +581,12 @@ def main():
                 f"Total cost: {total_cost:.2f}, "
                 f"Avg cost: {avg_cost:.4f}\n"
             )
-            
+
         except Exception as e:
             print(f"  ERROR: {e}\n")
-    
+
     print(f"\nAll visualizations saved to: {output_dir.absolute()}")
 
 
 if __name__ == "__main__":
     main()
-
