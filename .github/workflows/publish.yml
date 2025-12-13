@@ -39,6 +39,11 @@ jobs:
   build-wheels:
     needs: check-tag
     runs-on: ubuntu-latest
+    # Prevent concurrent tag builds that could cause cache corruption
+    # Only serialize tagged builds (is_tagged == 'true'), allow master to run in parallel
+    concurrency:
+      group: ${{ needs.check-tag.outputs.is_tagged == 'true' && format('build-wheels-tag-{0}', github.ref) || format('build-wheels-non-tag-{0}-{1}', matrix.target, matrix.python-version) }}
+      cancel-in-progress: ${{ needs.check-tag.outputs.is_tagged != 'true' }}
     strategy:
       matrix:
         target: [x86_64-unknown-linux-gnu, aarch64-unknown-linux-gnu]
@@ -76,12 +81,17 @@ jobs:
         uses: actions/cache@v4
         with:
           path: dist
-          key: wheel-${{ matrix.platform }}-py${{ matrix.python-version }}-${{ steps.version.outputs.version }}-${{ hashFiles('**/Cargo.lock', '**/pyproject.toml') }}
+          # Include both file hashes AND job ID to prevent cross-job cache pollution
+          # Multiple concurrent jobs writing to same cache is a known limitation of GitHub Actions
+          key: wheel-${{ matrix.platform }}-py${{ matrix.python-version }}-${{ steps.version.outputs.version }}-${{ hashFiles('**/Cargo.lock', '**/pyproject.toml') }}-${{ github.run_id }}-${{ matrix.python-version }}
           restore-keys: |
+            wheel-${{ matrix.platform }}-py${{ matrix.python-version }}-${{ steps.version.outputs.version }}-${{ hashFiles('**/Cargo.lock', '**/pyproject.toml') }}-
             wheel-${{ matrix.platform }}-py${{ matrix.python-version }}-${{ steps.version.outputs.version }}-
             wheel-${{ matrix.platform }}-py${{ matrix.python-version }}-
           # Note: GitHub automatically expires unused caches after 7 days of no access
           # Since max duration between build and publish is 1 day, caches will expire naturally
+          # WARNING: GitHub Actions cache@v4 does NOT provide atomic writes. Multiple concurrent jobs
+          # writing to similar cache keys can cause corruption. Concurrency group prevents this.
 
       - name: Check cache status
         if: steps.version.outputs.is_tagged == 'true'
@@ -213,6 +223,15 @@ jobs:
             maturin build --release --target $TARGET --out dist -i python${{ matrix.python-version }}
           fi
 
+      - name: Verify wheel was built or restored from cache
+        run: |
+          if [ ! -d dist ] || [ -z "$(find dist -name '*.whl' 2>/dev/null)" ]; then
+            echo "ERROR: No wheels found in dist directory!"
+            exit 1
+          fi
+          echo "✓ Wheels ready in dist/"
+          ls -la dist/
+
       - name: Upload wheel artifacts
         uses: actions/upload-artifact@v4
         with:
@@ -231,8 +250,8 @@ jobs:
           rm -rf target/
           # Remove cargo config created for cross-compilation
           rm -rf .cargo/
-          # Remove dist directory (wheels are already uploaded as artifacts)
-          rm -rf dist/
+          # NOTE: Keep dist/ during this job since upload-artifact needs it!
+          # The dist directory is cleaned up after artifacts are uploaded by the runner
           # Remove any temporary Python cache
           find . -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true
           find . -type f -name "*.pyc" -delete 2>/dev/null || true
@@ -246,6 +265,10 @@ jobs:
     runs-on: ubuntu-latest
     if: needs.check-tag.outputs.is_tagged == 'true'
     environment: pypi
+    # Prevent concurrent publishes for the same tag - use tag as key for publishing
+    concurrency:
+      group: publish-${{ needs.check-tag.outputs.tag }}
+      cancel-in-progress: false
 
     steps:
       - name: Checkout code
