@@ -3,6 +3,8 @@ name: Build and Publish
 on:
   push:
     branches: [master]
+    tags:
+      - "*"
   workflow_dispatch:
 
 permissions:
@@ -40,7 +42,7 @@ jobs:
     strategy:
       matrix:
         target: [x86_64-unknown-linux-gnu, aarch64-unknown-linux-gnu]
-        python-version: ["3.10", "3.11", "3.12", "3.13"]
+        python-version: ["3.10", "3.11", "3.12", "3.13", "3.14"]
         include:
           - target: x86_64-unknown-linux-gnu
             platform: linux-x86_64
@@ -50,6 +52,46 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # Fetch full history for tag detection
+
+      - name: Get version for cache key
+        id: version
+        run: |
+          if [ "${{ needs.check-tag.outputs.is_tagged }}" == "true" ]; then
+            TAG_VERSION="${{ needs.check-tag.outputs.tag }}"
+            # Remove 'v' prefix if present
+            TAG_VERSION=${TAG_VERSION#v}
+            echo "version=$TAG_VERSION" >> $GITHUB_OUTPUT
+            echo "is_tagged=true" >> $GITHUB_OUTPUT
+          else
+            # For non-tagged builds, use commit SHA
+            echo "version=${{ github.sha }}" >> $GITHUB_OUTPUT
+            echo "is_tagged=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Cache wheel artifacts
+        id: cache-wheels
+        if: steps.version.outputs.is_tagged == 'true'
+        uses: actions/cache@v4
+        with:
+          path: dist
+          key: wheel-${{ matrix.platform }}-py${{ matrix.python-version }}-${{ steps.version.outputs.version }}-${{ hashFiles('**/Cargo.lock', '**/pyproject.toml') }}
+          restore-keys: |
+            wheel-${{ matrix.platform }}-py${{ matrix.python-version }}-${{ steps.version.outputs.version }}-
+            wheel-${{ matrix.platform }}-py${{ matrix.python-version }}-
+          # Note: GitHub automatically expires unused caches after 7 days of no access
+          # Since max duration between build and publish is 1 day, caches will expire naturally
+
+      - name: Check cache status
+        if: steps.version.outputs.is_tagged == 'true'
+        run: |
+          if [ "${{ steps.cache-wheels.outputs.cache-hit }}" == "true" ]; then
+            echo "✓ Wheels restored from cache for version ${{ steps.version.outputs.version }}"
+            ls -la dist/ || true
+          else
+            echo "✗ No cache found, will build wheels for version ${{ steps.version.outputs.version }}"
+          fi
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
@@ -130,9 +172,11 @@ jobs:
           version: "latest"
 
       - name: Build wheel
+        if: steps.cache-wheels.outputs.cache-hit != 'true'
         env:
           TARGET: ${{ matrix.target }}
         run: |
+          mkdir -p dist
           if [ "$TARGET" = "x86_64-unknown-linux-gnu" ]; then
             # Create a virtual environment with uv for the specific Python version
             uv venv --python ${{ matrix.python-version }}
@@ -174,11 +218,33 @@ jobs:
         with:
           name: wheel-${{ matrix.platform }}-py${{ matrix.python-version }}
           path: dist/*.whl
+          if-no-files-found: error
+        # Note: Cache is automatically saved by the cache action if path changed and cache step ran
+
+      - name: Cleanup working directories and generated files
+        if: always()
+        run: |
+          echo "Cleaning up working directories and generated files..."
+          # Remove virtual environments
+          rm -rf .venv
+          # Remove Rust build artifacts (target directory)
+          rm -rf target/
+          # Remove cargo config created for cross-compilation
+          rm -rf .cargo/
+          # Remove dist directory (wheels are already uploaded as artifacts)
+          rm -rf dist/
+          # Remove any temporary Python cache
+          find . -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true
+          find . -type f -name "*.pyc" -delete 2>/dev/null || true
+          find . -type f -name "*.pyo" -delete 2>/dev/null || true
+          # Remove any symlinks created for Python interpreters
+          sudo rm -f /usr/local/bin/python3.10 /usr/local/bin/python3.11 /usr/local/bin/python3.12 /usr/local/bin/python3.13 /usr/local/bin/python3.14 2>/dev/null || true
+          echo "Cleanup completed"
 
   publish:
     needs: [check-tag, build-wheels]
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/master' && needs.check-tag.outputs.is_tagged == 'true'
+    if: needs.check-tag.outputs.is_tagged == 'true'
     environment: pypi
 
     steps:
@@ -193,7 +259,6 @@ jobs:
           merge-multiple: true
 
       - name: Update version from tag
-        if: needs.check-tag.outputs.is_tagged == 'true'
         run: |
           TAG_VERSION=${{ needs.check-tag.outputs.tag }}
           echo "Original tag: $TAG_VERSION"
@@ -239,9 +304,22 @@ jobs:
           find dist/ -name "*.tar.gz" -exec ls -la {} \;
 
       - name: Publish to PyPI
+        id: publish
         run: |
           # Upload all wheels and source distribution using OIDC
           uv publish dist/*
+
+      - name: Cleanup working directories and generated files
+        if: always()
+        run: |
+          echo "Cleaning up working directories and generated files..."
+          # Remove dist directory (packages are already published)
+          rm -rf dist/
+          # Remove any temporary Python cache
+          find . -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true
+          find . -type f -name "*.pyc" -delete 2>/dev/null || true
+          find . -type f -name "*.pyo" -delete 2>/dev/null || true
+          echo "Cleanup completed"
 
   test-build:
     runs-on: ubuntu-latest
@@ -306,3 +384,17 @@ jobs:
       - name: Test import
         run: |
           uv run python -c "from spot_planner import get_cheapest_periods; print('Import successful')"
+
+      - name: Cleanup working directories and generated files
+        if: always()
+        run: |
+          echo "Cleaning up working directories and generated files..."
+          # Remove virtual environment
+          rm -rf .venv
+          # Remove Rust build artifacts (target directory)
+          rm -rf target/
+          # Remove any temporary Python cache
+          find . -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true
+          find . -type f -name "*.pyc" -delete 2>/dev/null || true
+          find . -type f -name "*.pyo" -delete 2>/dev/null || true
+          echo "Cleanup completed"
