@@ -39,11 +39,12 @@ jobs:
   build-wheels:
     needs: check-tag
     runs-on: ubuntu-latest
-    # Prevent concurrent tag builds that could cause cache corruption
-    # Only serialize tagged builds (is_tagged == 'true'), allow master to run in parallel
+    # Prevent concurrent tag builds that could cause cache corruption - only if building
+    # For tagged builds, each matrix job gets its own concurrency group so they can run in parallel
+    # and mostly restore from cache instead of building. Non-tagged builds use the same pattern.
     concurrency:
-      group: ${{ needs.check-tag.outputs.is_tagged == 'true' && format('build-wheels-tag-{0}', github.ref) || format('build-wheels-non-tag-{0}-{1}', matrix.target, matrix.python-version) }}
-      cancel-in-progress: ${{ needs.check-tag.outputs.is_tagged != 'true' }}
+      group: ${{ needs.check-tag.outputs.is_tagged == 'true' && format('build-wheels-tag-{0}-{1}-{2}', github.ref, matrix.target, matrix.python-version) || format('build-wheels-non-tag-{0}-{1}', matrix.target, matrix.python-version) }}
+      cancel-in-progress: false
     strategy:
       matrix:
         target: [x86_64-unknown-linux-gnu, aarch64-unknown-linux-gnu]
@@ -74,27 +75,28 @@ jobs:
             echo "version=${{ github.sha }}" >> $GITHUB_OUTPUT
             echo "is_tagged=false" >> $GITHUB_OUTPUT
           fi
+          # Store commit SHA for cache lookup
+          echo "commit_sha=${{ github.sha }}" >> $GITHUB_OUTPUT
 
       - name: Cache wheel artifacts
         id: cache-wheels
-        if: steps.version.outputs.is_tagged == 'true'
         uses: actions/cache@v4
         with:
           path: dist
-          # Include both file hashes AND job ID to prevent cross-job cache pollution
-          # Multiple concurrent jobs writing to same cache is a known limitation of GitHub Actions
-          key: wheel-${{ matrix.platform }}-py${{ matrix.python-version }}-${{ steps.version.outputs.version }}-${{ hashFiles('**/Cargo.lock', '**/pyproject.toml') }}-${{ github.run_id }}-${{ matrix.python-version }}
+          # Cache key strategy:
+          # - For tagged builds: try to restore from the matching commit SHA first
+          # - For non-tagged builds: cache using commit SHA for future tag releases to reuse
+          # This allows tag releases to reuse wheels built during master branch pushes
+          key: wheel-${{ matrix.platform }}-py${{ matrix.python-version }}-${{ steps.version.outputs.commit_sha }}-${{ hashFiles('**/Cargo.lock', '**/pyproject.toml') }}-v1
           restore-keys: |
-            wheel-${{ matrix.platform }}-py${{ matrix.python-version }}-${{ steps.version.outputs.version }}-${{ hashFiles('**/Cargo.lock', '**/pyproject.toml') }}-
-            wheel-${{ matrix.platform }}-py${{ matrix.python-version }}-${{ steps.version.outputs.version }}-
-            wheel-${{ matrix.platform }}-py${{ matrix.python-version }}-
+            wheel-${{ matrix.platform }}-py${{ matrix.python-version }}-${{ steps.version.outputs.commit_sha }}-${{ hashFiles('**/Cargo.lock', '**/pyproject.toml') }}-
+            wheel-${{ matrix.platform }}-py${{ matrix.python-version }}-${{ steps.version.outputs.commit_sha }}-
           # Note: GitHub automatically expires unused caches after 7 days of no access
-          # Since max duration between build and publish is 1 day, caches will expire naturally
+          # Cache is keyed by commit SHA so tag releases can reuse wheels from master builds
           # WARNING: GitHub Actions cache@v4 does NOT provide atomic writes. Multiple concurrent jobs
           # writing to similar cache keys can cause corruption. Concurrency group prevents this.
 
       - name: Check cache status
-        if: steps.version.outputs.is_tagged == 'true'
         run: |
           if [ "${{ steps.cache-wheels.outputs.cache-hit }}" == "true" ]; then
             echo "✓ Wheels restored from cache for version ${{ steps.version.outputs.version }}"
