@@ -8,6 +8,6 @@ name = "spot_planner"
 crate-type = ["cdylib"]
 
 [dependencies]
-pyo3 = { version = "0.22", features = ["extension-module"] }
+pyo3 = { version = "0.27", features = ["extension-module"] }
 rust_decimal = "1.36"
 itertools = "0.12"
