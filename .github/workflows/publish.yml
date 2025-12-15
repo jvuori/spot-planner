@@ -36,11 +36,16 @@ jobs:
       - name: Check if this is a tagged release
         id: check
         run: |
-          if git describe --exact-match --tags HEAD 2>/dev/null; then
+          # Check if the push was actually a tag push (not just a commit that happens to be tagged)
+          if [[ "${{ github.ref }}" == refs/tags/* ]]; then
+            # Extract tag name from ref (e.g., refs/tags/v1.0.0 -> v1.0.0)
+            TAG_NAME="${GITHUB_REF#refs/tags/}"
             echo "is_tagged=true" >> $GITHUB_OUTPUT
-            echo "tag=$(git describe --exact-match --tags HEAD)" >> $GITHUB_OUTPUT
+            echo "tag=$TAG_NAME" >> $GITHUB_OUTPUT
+            echo "Detected tag push: $TAG_NAME"
           else
             echo "is_tagged=false" >> $GITHUB_OUTPUT
+            echo "Not a tag push (ref: ${{ github.ref }})"
           fi
 
   build-wheels:
