@@ -14,6 +14,13 @@ permissions:
 env:
   CARGO_TERM_COLOR: always
 
+# Workflow-level concurrency: ensure only one workflow runs at a time per ref
+# This prevents race conditions when pushing tags while previous workflows are still running
+# For tag pushes, this ensures the cache is valid from any previous run before starting
+concurrency:
+  group: workflow-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   check-tag:
     runs-on: ubuntu-latest

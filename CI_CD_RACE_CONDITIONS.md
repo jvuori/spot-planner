@@ -34,7 +34,7 @@ T6: Job#2 finishes, tries to save cache: wheel-linux-x86_64-py3.11-v1.0.0-hash1
 T7: Job#3 finishes, saves cache, but now cache keys are inconsistent
 ```
 
-### 2. **Concurrent Tag Pushes with Build Overlap** 🟡 MEDIUM
+### 2. **Concurrent Tag Pushes with Build Overlap** 🟡 MEDIUM (RESOLVED)
 
 **Scenario:**
 - Tag `v1.0.0` pushed, build-wheels starts with 10 jobs
@@ -45,6 +45,26 @@ T7: Job#3 finishes, saves cache, but now cache keys are inconsistent
 - Two independent build-wheels runs now compete for resources
 - Cache entries from v1.0.0 might be read by v1.0.1 jobs
 - If a v1.0.0 job hasn't finished its cache write, v1.0.1 might get inconsistent state
+
+**Resolution:**
+- Workflow-level concurrency ensures tag pushes wait for previous workflows to complete
+- Each tag gets its own concurrency group, preventing overlap
+
+### 2b. **Tag Push During Branch Build** 🟡 MEDIUM (RESOLVED)
+
+**Scenario:**
+- Branch push (e.g., to master) triggers workflow that builds wheels
+- While that workflow is still running, a tag is pushed
+- Tag workflow starts and tries to publish while branch workflow is still building
+
+**Problems:**
+- Tag workflow might try to publish wheels that were already published
+- PyPI rejects duplicate uploads with "File already exists" error
+- Artifacts from different workflow runs might get mixed
+
+**Resolution:**
+- Workflow-level concurrency ensures tag pushes wait for any in-progress workflows
+- This ensures cache is valid and no duplicate uploads occur
 
 ### 3. **Artifact Upload Race & Cleanup Race** 🟡 MEDIUM
 
@@ -58,7 +78,7 @@ T7: Job#3 finishes, saves cache, but now cache keys are inconsistent
 - `upload-artifact` might have incomplete transfers
 - `publish` job receives corrupted or missing wheels
 
-### 4. **Concurrent Publish Attempts** 🟡 MEDIUM
+### 4. **Concurrent Publish Attempts** 🟡 MEDIUM (RESOLVED)
 
 **Scenario:**
 - Two tags pushed quickly: v1.0.0 and v1.0.1
@@ -66,27 +86,46 @@ T7: Job#3 finishes, saves cache, but now cache keys are inconsistent
 - Both try to publish to PyPI simultaneously
 
 **Problems:**
-- PyPI rejects duplicate versions
+- PyPI rejects duplicate versions (e.g., "File already exists")
 - Mix of v1.0.0 and v1.0.1 wheels might be published to wrong versions
 - Manual intervention needed to fix PyPI registry
 
+**Resolution:**
+- Workflow-level concurrency ensures only one workflow runs per ref at a time
+- Tag pushes wait for any in-progress workflows to complete before starting
+- This prevents duplicate uploads and ensures cache validity
+
 ## Solutions Implemented
 
-### Solution 1: Concurrency Groups (Primary Fix)
+### Solution 1: Workflow-Level Concurrency (Primary Fix)
 
 ```yaml
 concurrency:
-  group: build-wheels-${{ needs.check-tag.outputs.is_tagged }}-${{ github.ref }}
+  group: workflow-${{ github.ref }}
   cancel-in-progress: false
 ```
 
 **Effect:**
-- Only ONE `build-wheels` run per tag reference allowed simultaneously
-- If new tag is pushed before previous build completes, the new push is **queued** (not cancelled)
-- Prevents cache corruption from concurrent writes
-- Serializes the 10 matrix jobs for each tag
+- Only ONE workflow run per ref (branch or tag) allowed simultaneously
+- If a tag is pushed while a previous workflow (branch or tag) is still running, the new workflow is **queued** (not cancelled)
+- Ensures the cache is fully written and valid from any previous run before starting the next one
+- Prevents race conditions where tag pushes try to publish while previous workflows are still building
+- Prevents duplicate PyPI uploads from concurrent workflows
 
 **Caveat:** `cancel-in-progress: false` means we wait for completion. This is safer than cancelling incomplete builds.
+
+### Solution 2: Job-Level Concurrency Groups
+
+```yaml
+concurrency:
+  group: build-wheels-${{ needs.check-tag.outputs.is_tagged }}-${{ github.ref }}-${{ matrix.target }}-${{ matrix.python-version }}
+  cancel-in-progress: false
+```
+
+**Effect:**
+- Additional concurrency control at the job level for extra safety
+- Each matrix job has its own concurrency group
+- Works in conjunction with workflow-level concurrency to prevent all race conditions
 
 ### Solution 2: Robust Cache Keys
 
