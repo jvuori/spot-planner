@@ -103,13 +103,50 @@ jobs:
           # WARNING: GitHub Actions cache@v4 does NOT provide atomic writes. Multiple concurrent jobs
           # writing to similar cache keys can cause corruption. Concurrency group prevents this.
 
-      - name: Check cache status
+      - name: Check cache status and verify wheel versions
+        id: verify-wheels
         run: |
           if [ "${{ steps.cache-wheels.outputs.cache-hit }}" == "true" ]; then
-            echo "✓ Wheels restored from cache for version ${{ steps.version.outputs.version }}"
+            echo "✓ Wheels restored from cache"
             ls -la dist/ || true
+            
+            # For tagged builds, verify that cached wheels match the tag version
+            if [ "${{ needs.check-tag.outputs.is_tagged }}" == "true" ]; then
+              EXPECTED_VERSION="${{ steps.version.outputs.version }}"
+              echo "Expected version from tag: $EXPECTED_VERSION"
+              
+              # Check if any wheels exist
+              if [ -d dist ] && [ -n "$(find dist -name '*.whl' 2>/dev/null)" ]; then
+                # Extract version from first wheel filename
+                # Format: spot_planner-{version}-cp{py_version}-cp{py_version}-{platform}.whl
+                FIRST_WHEEL=$(find dist -name '*.whl' | head -1)
+                if [ -n "$FIRST_WHEEL" ]; then
+                  CACHED_VERSION=$(basename "$FIRST_WHEEL" | sed -E 's/spot_planner-([^-]+)-.*/\1/')
+                  echo "Cached wheel version: $CACHED_VERSION"
+                  
+                  if [ "$CACHED_VERSION" != "$EXPECTED_VERSION" ]; then
+                    echo "⚠️ WARNING: Cached wheels have version $CACHED_VERSION but tag requires $EXPECTED_VERSION"
+                    echo "Will rebuild wheels to match tag version"
+                    echo "needs_rebuild=true" >> $GITHUB_OUTPUT
+                  else
+                    echo "✓ Cached wheels match expected version $EXPECTED_VERSION"
+                    echo "needs_rebuild=false" >> $GITHUB_OUTPUT
+                  fi
+                else
+                  echo "No wheels found in cache, will build"
+                  echo "needs_rebuild=true" >> $GITHUB_OUTPUT
+                fi
+              else
+                echo "No wheels found in cache, will build"
+                echo "needs_rebuild=true" >> $GITHUB_OUTPUT
+              fi
+            else
+              # For non-tagged builds, use cached wheels as-is
+              echo "needs_rebuild=false" >> $GITHUB_OUTPUT
+            fi
           else
             echo "✗ No cache found, will build wheels for version ${{ steps.version.outputs.version }}"
+            echo "needs_rebuild=true" >> $GITHUB_OUTPUT
           fi
 
       - name: Install Rust
@@ -190,8 +227,15 @@ jobs:
         with:
           version: "latest"
 
+      - name: Clean up old wheels if version mismatch
+        if: steps.verify-wheels.outputs.needs_rebuild == 'true' && steps.cache-wheels.outputs.cache-hit == 'true'
+        run: |
+          echo "Removing old wheels with incorrect version from dist/"
+          rm -f dist/*.whl
+          echo "Cleaned up old wheels"
+
       - name: Build wheel
-        if: steps.cache-wheels.outputs.cache-hit != 'true'
+        if: steps.verify-wheels.outputs.needs_rebuild == 'true'
         env:
           TARGET: ${{ matrix.target }}
         run: |
@@ -317,6 +361,51 @@ jobs:
           grep "version = " Cargo.toml
 
           echo "Updated version to $TAG_VERSION"
+
+      - name: Verify and filter wheel versions
+        run: |
+          TAG_VERSION=${{ needs.check-tag.outputs.tag }}
+          # Remove 'v' prefix if present
+          TAG_VERSION=${TAG_VERSION#v}
+          echo "Expected version from tag: $TAG_VERSION"
+
+          # Find all wheel files
+          WHEELS=$(find dist -name '*.whl' 2>/dev/null || true)
+
+          if [ -z "$WHEELS" ]; then
+            echo "ERROR: No wheel files found in dist/"
+            exit 1
+          fi
+
+          echo "Checking wheel versions..."
+          REMOVED_COUNT=0
+          for wheel in $WHEELS; do
+            # Extract version from wheel filename
+            # Format: spot_planner-{version}-cp{py_version}-cp{py_version}-{platform}.whl
+            WHEEL_VERSION=$(basename "$wheel" | sed -E 's/spot_planner-([^-]+)-.*/\1/')
+            echo "  $wheel -> version: $WHEEL_VERSION"
+            
+            if [ "$WHEEL_VERSION" != "$TAG_VERSION" ]; then
+              echo "  ⚠️ REMOVING: Wheel has version $WHEEL_VERSION but tag requires $TAG_VERSION"
+              rm -f "$wheel"
+              REMOVED_COUNT=$((REMOVED_COUNT + 1))
+            else
+              echo "  ✓ Wheel version matches tag"
+            fi
+          done
+
+          if [ $REMOVED_COUNT -gt 0 ]; then
+            echo "⚠️ Removed $REMOVED_COUNT wheel(s) with incorrect version"
+          fi
+
+          # Verify we still have wheels left
+          REMAINING_WHEELS=$(find dist -name '*.whl' 2>/dev/null | wc -l)
+          if [ "$REMAINING_WHEELS" -eq 0 ]; then
+            echo "ERROR: No wheels remaining after version check!"
+            exit 1
+          fi
+
+          echo "✓ $REMAINING_WHEELS wheel(s) with correct version ready for publishing"
 
       - name: Install uv
         uses: astral-sh/setup-uv@v3
