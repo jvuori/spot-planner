@@ -735,31 +735,71 @@ def get_cheapest_periods_extended(
     rough_max_gap_start = min(rough_max_gap_start, rough_max_gap)
 
     # Get rough selection pattern
-    try:
-        rough_selected = _get_cheapest_periods(
-            averages,
-            low_price_threshold,
-            rough_min_selections,
-            rough_min_consecutive,
-            rough_max_gap,
-            rough_max_gap_start,
-            aggressive,
-        )
-    except ValueError:
-        # If rough planning fails with scaled constraints, try more lenient
+    # If we have more than 28 averages, chunk them for brute-force processing
+    if len(averages) > 28:
+        # Split into chunks of max 20 averages to stay under the 28-item limit
+        ROUGH_CHUNK_SIZE = 20
+        rough_selected = []
+        
+        for chunk_start_idx in range(0, len(averages), ROUGH_CHUNK_SIZE):
+            chunk_end_idx = min(chunk_start_idx + ROUGH_CHUNK_SIZE, len(averages))
+            chunk_averages = averages[chunk_start_idx:chunk_end_idx]
+            
+            # Calculate target for this chunk (proportional)
+            chunk_target = max(1, (rough_min_selections * len(chunk_averages)) // len(averages))
+            
+            try:
+                chunk_selected = _get_cheapest_periods(
+                    chunk_averages,
+                    low_price_threshold,
+                    chunk_target,
+                    rough_min_consecutive,
+                    rough_max_gap,
+                    rough_max_gap_start if chunk_start_idx == 0 else rough_max_gap,
+                    aggressive,
+                )
+                # Offset indices back to global positions
+                for idx in chunk_selected:
+                    rough_selected.append(chunk_start_idx + idx)
+            except ValueError:
+                # If this chunk fails, select cheapest items from it
+                sorted_chunk = sorted(
+                    range(len(chunk_averages)),
+                    key=lambda i: chunk_averages[i]
+                )
+                for idx in sorted_chunk[:min(chunk_target, len(chunk_averages))]:
+                    rough_selected.append(chunk_start_idx + idx)
+        
+        rough_selected = sorted(rough_selected)
+    else:
+        # Original logic for <=28 averages
         try:
             rough_selected = _get_cheapest_periods(
                 averages,
                 low_price_threshold,
                 rough_min_selections,
-                1,  # min_consecutive = 1
-                len(averages),  # max_gap = all
-                len(averages),  # max_gap_start = all
+                rough_min_consecutive,
+                rough_max_gap,
+                rough_max_gap_start,
                 aggressive,
             )
         except ValueError:
-            # Last resort: select all averages
-            rough_selected = list(range(len(averages)))
+            # If rough planning fails with scaled constraints, try more lenient
+            try:
+                rough_selected = _get_cheapest_periods(
+                    averages,
+                    low_price_threshold,
+                    rough_min_selections,
+                    1,  # min_consecutive = 1
+                    len(averages),  # max_gap = all
+                    len(averages),  # max_gap_start = all
+                    aggressive,
+                )
+            except ValueError:
+                # Last resort: select only cheap average groups
+                rough_selected = [
+                    i for i, avg in enumerate(averages) if avg <= low_price_threshold
+                ]
 
     # Phase 2: Fine-grained planning
     # Calculate target selections per chunk based on rough plan
