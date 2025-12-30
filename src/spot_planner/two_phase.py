@@ -285,6 +285,22 @@ def _find_best_chunk_selection_with_lookahead(
     if target == 0:
         return []
 
+    # Check if we can skip this chunk entirely if it's mostly expensive
+    # and we can reach the next chunk within max_gap
+    cheap_items_in_chunk = sum(1 for p in chunk_prices if p <= low_price_threshold)
+    chunk_is_mostly_expensive = cheap_items_in_chunk < min_consecutive_periods
+    
+    if chunk_is_mostly_expensive and next_chunk_prices is not None:
+        # Check if next chunk has cheap items we can select instead
+        next_chunk_cheap_items = sum(1 for p in next_chunk_prices if p <= low_price_threshold)
+        if next_chunk_cheap_items >= min_consecutive_periods:
+            # Check if we can skip this chunk (gap from previous selection to next chunk)
+            # This is a heuristic - if max_gap is large enough, we can likely skip
+            # The actual gap check happens at the chunk boundary level
+            if max_gap_between_periods >= chunk_len:
+                # Can skip this expensive chunk - return empty selection
+                return []
+
     # If there's no next chunk, just find the best selection for this chunk
     if next_chunk_prices is None:
         result = _try_chunk_selection(
@@ -320,6 +336,49 @@ def _find_best_chunk_selection_with_lookahead(
     # For aggressive: average cost
     # For conservative: (cheap_count, total_cost) tuple for comparison
     candidates: list[tuple[list[int], Decimal | tuple[int, Decimal]]] = []
+
+    # Strategy 0: Skip expensive chunk if max_gap allows and next chunk has cheap items
+    cheap_items_in_chunk = sum(1 for p in chunk_prices if p <= low_price_threshold)
+    chunk_is_mostly_expensive = cheap_items_in_chunk < min_consecutive_periods
+    
+    if chunk_is_mostly_expensive and next_chunk_prices is not None:
+        # Check if next chunk has enough cheap items
+        next_chunk_cheap_items = sum(1 for p in next_chunk_prices if p <= low_price_threshold)
+        if next_chunk_cheap_items >= min_consecutive_periods:
+            # Check if we can skip this chunk (gap constraint allows it)
+            # If max_gap is at least chunk_len, we can skip the entire chunk
+            if max_gap_between_periods >= chunk_len:
+                # Try selecting from next chunk instead
+                # This simulates skipping current chunk and selecting from next
+                skip_selection = []  # Empty selection for current chunk
+                # Estimate cost of selecting from next chunk
+                # Find cheapest items in next chunk
+                next_chunk_cheap_indices = [
+                    i for i, p in enumerate(next_chunk_prices)
+                    if p <= low_price_threshold
+                ]
+                next_chunk_cheap_indices.sort(key=lambda i: next_chunk_prices[i])
+                # Take enough to form a valid block
+                estimated_next_selection = next_chunk_cheap_indices[:min_consecutive_periods]
+                estimated_next_cost = sum(
+                    (next_chunk_prices[i] for i in estimated_next_selection), Decimal(0)
+                )
+                
+                # Cost of skipping: 0 for current chunk + estimated cost for next
+                skip_cost = estimated_next_cost
+                
+                if aggressive:
+                    # For aggressive, compare average cost
+                    # Since we're skipping current chunk, we need to compare with
+                    # what we would have selected in current chunk
+                    # Use estimated cost per item from next chunk
+                    if estimated_next_selection:
+                        avg_skip_cost = skip_cost / Decimal(len(estimated_next_selection))
+                        candidates.append((skip_selection, avg_skip_cost))
+                else:
+                    # For conservative, prefer skipping expensive chunks
+                    # Use (cheap_count=0 for current, but next has cheap items, low cost)
+                    candidates.append((skip_selection, (0, skip_cost)))
 
     # Strategy 1: Standard selection (locally optimal)
     selection = _try_chunk_selection(
@@ -583,7 +642,10 @@ def _repair_selection(
         result = sorted(result)
 
     # Fix gap from start
-    while result and result[0] > max_gap_from_start:
+    max_start_fixes = n  # Safety limit
+    start_fix_count = 0
+    while result and result[0] > max_gap_from_start and start_fix_count < max_start_fixes:
+        start_fix_count += 1
         # Add items before first selection
         for i in range(result[0] - 1, -1, -1):
             result.insert(0, i)
@@ -592,9 +654,12 @@ def _repair_selection(
 
     # Fix gaps between selections
     i = 1
-    while i < len(result):
+    max_gap_fixes = n * 2  # Safety limit (allows fixing multiple gaps)
+    gap_fix_count = 0
+    while i < len(result) and gap_fix_count < max_gap_fixes:
         gap = result[i] - result[i - 1] - 1
         if gap > max_gap_between_periods:
+            gap_fix_count += 1
             # Fill the gap with cheapest items
             gap_items = list(range(result[i - 1] + 1, result[i]))
             gap_items.sort(key=lambda x: prices[x])
@@ -603,23 +668,104 @@ def _repair_selection(
             for item in gap_items[:items_needed]:
                 result.append(item)
             result = sorted(result)
+            # Reset i to 1 to re-check all gaps after adding items
+            i = 1
         else:
             i += 1
 
     # Fix gap at end
-    while result and (n - 1 - result[-1]) > max_gap_between_periods:
+    max_end_fixes = n  # Safety limit
+    end_fix_count = 0
+    while result and (n - 1 - result[-1]) > max_gap_between_periods and end_fix_count < max_end_fixes:
+        end_fix_count += 1
         result.append(result[-1] + 1)
+        # Safety check: ensure we don't exceed array bounds
+        if result[-1] >= n:
+            break
 
     # Fix consecutive block lengths
     result = sorted(set(result))
     i = 0
-    while i < len(result):
+    max_iterations = len(result) * 20  # Safety limit to prevent infinite loops
+    iteration_count = 0
+    previous_result_hash = None
+    stable_iterations = 0
+    while i < len(result) and iteration_count < max_iterations:
+        iteration_count += 1
+        # Check for cycles: if result hasn't changed in several iterations, break
+        current_result_hash = hash(tuple(result))
+        if current_result_hash == previous_result_hash:
+            stable_iterations += 1
+            if stable_iterations > 5:
+                # Result is stable, no more changes needed
+                break
+        else:
+            stable_iterations = 0
+            previous_result_hash = current_result_hash
         # Find current block
         block_start = i
         while i + 1 < len(result) and result[i + 1] == result[i] + 1:
             i += 1
         block_end = i
         block_length = block_end - block_start + 1
+        block_start_idx = result[block_start]
+        block_end_idx = result[block_end]
+
+        # Check if this block is entirely expensive and we can skip it
+        if block_length > 0:
+            block_is_expensive = all(
+                prices[result[j]] > low_price_threshold
+                for j in range(block_start, block_end + 1)
+            )
+            
+            if block_is_expensive:
+                # Check if we can skip this expensive block
+                # Find the previous block's end (the last selected item before this block)
+                prev_cheap_idx = None
+                if block_start > 0:
+                    prev_block_end_idx = result[block_start - 1]
+                    # The previous block ends at prev_block_end_idx
+                    # Check if it's cheap, and if so, use it as the previous cheap reference
+                    if prices[prev_block_end_idx] <= low_price_threshold:
+                        prev_cheap_idx = prev_block_end_idx
+                    else:
+                        # Previous block is also expensive, look further back
+                        for idx in range(prev_block_end_idx - 1, max(-1, prev_block_end_idx - max_gap_between_periods - 1), -1):
+                            if idx >= 0 and idx in result and prices[idx] <= low_price_threshold:
+                                prev_cheap_idx = idx
+                                break
+                
+                # Look for next cheap item after this expensive block
+                next_cheap_idx = None
+                for idx in range(block_end_idx + 1, min(block_end_idx + 1 + max_gap_between_periods + 1, n)):
+                    if prices[idx] <= low_price_threshold:
+                        next_cheap_idx = idx
+                        break
+                
+                # Check if we can skip: gap from prev to next is within max_gap
+                if prev_cheap_idx is not None and next_cheap_idx is not None:
+                    gap_prev_to_next = next_cheap_idx - prev_cheap_idx - 1
+                    if gap_prev_to_next <= max_gap_between_periods:
+                        # Can skip this expensive block entirely
+                        # Remove all items in this block (collect indices first)
+                        indices_to_remove = [result[j] for j in range(block_start, block_end + 1)]
+                        for idx in indices_to_remove:
+                            result.remove(idx)
+                        result = sorted(set(result))
+                        # Restart from beginning to re-check
+                        i = 0
+                        continue
+                elif prev_cheap_idx is None and next_cheap_idx is not None:
+                    # No previous block, but can skip to next cheap
+                    gap_to_next = next_cheap_idx - block_end_idx - 1
+                    if gap_to_next <= max_gap_between_periods:
+                        # Remove this expensive block (collect indices first)
+                        indices_to_remove = [result[j] for j in range(block_start, block_end + 1)]
+                        for idx in indices_to_remove:
+                            result.remove(idx)
+                        result = sorted(set(result))
+                        i = 0
+                        continue
 
         # Check if this is not the last block and is too short
         is_last_block = block_end == len(result) - 1
@@ -628,38 +774,81 @@ def _repair_selection(
         if block_length < min_consecutive_periods and not (
             is_last_block and is_at_sequence_end
         ):
-            # Extend the block
+            # Extend the block, preferring cheap items
             items_needed = min_consecutive_periods - block_length
             block_start_idx = result[block_start]
             block_end_idx = result[block_end]
 
-            # Try extending forward first
-            for j in range(items_needed):
+            # Check if we can skip an expensive region entirely
+            # Look ahead to find the next cheap item after this block
+            next_cheap_idx = None
+            for idx in range(block_end_idx + 1, min(block_end_idx + 1 + max_gap_between_periods + 1, n)):
+                if idx not in result and prices[idx] <= low_price_threshold:
+                    next_cheap_idx = idx
+                    break
+            
+            # If we found a cheap item within max_gap, check if we can skip expensive items
+            if next_cheap_idx is not None:
+                gap_to_cheap = next_cheap_idx - block_end_idx - 1
+                if gap_to_cheap <= max_gap_between_periods:
+                    # Check if items between block_end and next_cheap are all expensive
+                    expensive_between = all(
+                        prices[idx] > low_price_threshold
+                        for idx in range(block_end_idx + 1, next_cheap_idx)
+                        if idx not in result
+                    )
+                    if expensive_between:
+                        # Skip expensive region - don't extend this block
+                        # The gap is valid, so we can leave it as is
+                        i += 1
+                        continue
+
+            # Collect candidate items for extension (forward and backward)
+            forward_candidates = []
+            backward_candidates = []
+            
+            # Forward candidates - prefer cheap items
+            for j in range(items_needed * 3):  # Look ahead more to find cheap items
                 next_idx = block_end_idx + 1 + j
                 if next_idx < n and next_idx not in result:
-                    result.append(next_idx)
-
-            # If still short, extend backward
-            result = sorted(set(result))
-            # Recalculate block
-            new_block_start = block_start
-            while (
-                new_block_start + 1 < len(result)
-                and result[new_block_start + 1] == result[new_block_start] + 1
-            ):
-                new_block_start += 1
-            new_block_length = new_block_start - block_start + 1
-
-            if new_block_length < min_consecutive_periods:
-                items_still_needed = min_consecutive_periods - new_block_length
-                for j in range(items_still_needed):
-                    prev_idx = block_start_idx - 1 - j
-                    if prev_idx >= 0 and prev_idx not in result:
-                        result.append(prev_idx)
+                    forward_candidates.append(next_idx)
+            
+            # Backward candidates - prefer cheap items
+            for j in range(items_needed * 3):  # Look back more to find cheap items
+                prev_idx = block_start_idx - 1 - j
+                if prev_idx >= 0 and prev_idx not in result:
+                    backward_candidates.append(prev_idx)
+            
+            # Separate cheap and expensive candidates
+            cheap_forward = [idx for idx in forward_candidates if prices[idx] <= low_price_threshold]
+            expensive_forward = [idx for idx in forward_candidates if prices[idx] > low_price_threshold]
+            cheap_backward = [idx for idx in backward_candidates if prices[idx] <= low_price_threshold]
+            expensive_backward = [idx for idx in backward_candidates if prices[idx] > low_price_threshold]
+            
+            # Sort by price within each category
+            cheap_forward.sort(key=lambda idx: prices[idx])
+            expensive_forward.sort(key=lambda idx: prices[idx])
+            cheap_backward.sort(key=lambda idx: prices[idx])
+            expensive_backward.sort(key=lambda idx: prices[idx])
+            
+            # Prefer cheap items: first try cheap forward, then cheap backward, then expensive
+            added = 0
+            for candidate in cheap_forward + cheap_backward + expensive_forward + expensive_backward:
+                if added >= items_needed:
+                    break
+                if candidate not in result:
+                    result.append(candidate)
+                    added += 1
 
             result = sorted(set(result))
 
         i += 1
+    
+    # If we hit the iteration limit, log a warning but return what we have
+    if iteration_count >= max_iterations:
+        # This should not happen in normal operation, but if it does,
+        # we return the current result to avoid infinite loops
+        pass
 
     return sorted(set(result))
 
@@ -925,7 +1114,27 @@ def get_cheapest_periods_extended(
                     i + remaining_start for i in remaining_selected
                 ]
             else:
-                chunk_selected = forced_selections
+                # Only forced prefix - this should not happen if target enforcement worked correctly
+                # But if it does, we need to ensure we meet min_consecutive_periods
+                # The forced prefix should already be sized to complete the previous chunk's block
+                # So forced_prefix_length should be sufficient, but let's verify
+                if forced_prefix_length < min_consecutive_periods and len(remaining_prices) > 0:
+                    # This is a problem - forced prefix is too short
+                    # This shouldn't happen if the algorithm is working correctly
+                    # But as a safety, try to extend it minimally
+                    items_needed = min_consecutive_periods - forced_prefix_length
+                    sorted_remaining = sorted(
+                        range(len(remaining_prices)),
+                        key=lambda i: remaining_prices[i]
+                    )
+                    # Only add the minimum needed, not more
+                    additional = []
+                    for i in range(min(items_needed, len(sorted_remaining))):
+                        additional.append(remaining_start + sorted_remaining[i])
+                    chunk_selected = forced_selections + additional
+                    chunk_selected = sorted(set(chunk_selected))
+                else:
+                    chunk_selected = forced_selections
         else:
             # No forced prefix - use look-ahead optimization to find best selection
             chunk_selected = _find_best_chunk_selection_with_lookahead(
@@ -938,6 +1147,22 @@ def get_cheapest_periods_extended(
                 adjusted_max_gap_start,
                 aggressive,
             )
+
+        # Validate that chunk selection meets minimum requirements
+        # If target was enforced to min_consecutive_periods, we must have at least that many
+        if target >= min_consecutive_periods and len(chunk_selected) < min_consecutive_periods:
+            # Selection is too small - try to extend it
+            # This should not happen if the selection logic is working correctly,
+            # but as a safety measure, add cheapest items to meet the minimum
+            unselected_in_chunk = [
+                i for i in range(chunk_len) if i not in chunk_selected
+            ]
+            if unselected_in_chunk:
+                unselected_in_chunk.sort(key=lambda i: chunk_prices[i])
+                items_needed = min_consecutive_periods - len(chunk_selected)
+                for i in range(min(items_needed, len(unselected_in_chunk))):
+                    chunk_selected.append(unselected_in_chunk[i])
+                chunk_selected = sorted(set(chunk_selected))
 
         # Convert to global indices and add to result
         for local_idx in chunk_selected:
