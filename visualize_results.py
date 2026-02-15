@@ -17,6 +17,71 @@ from spot_planner import get_cheapest_periods
 from spot_planner import two_phase
 
 
+def validate_constraints(
+    selected_indices: list[int],
+    total_length: int,
+    min_consecutive_periods: int,
+    max_gap_between_periods: int,
+    max_gap_from_start: int,
+    min_selections: int,
+) -> tuple[bool, str]:
+    """
+    Validate that selected indices meet all constraints.
+    
+    Returns:
+        (is_valid, error_message): True if all constraints are met, False otherwise
+    """
+    if not selected_indices:
+        return False, "No periods selected"
+    
+    # Check min_selections
+    if len(selected_indices) < min_selections:
+        return False, f"Selected {len(selected_indices)} periods, but min_selections is {min_selections}"
+    
+    # Check max_gap_from_start
+    if selected_indices[0] > max_gap_from_start:
+        return False, f"First selection at index {selected_indices[0]}, but max_gap_from_start is {max_gap_from_start}"
+    
+    # Check gaps between consecutive selections and consecutive runs
+    consecutive_run_length = 1
+    consecutive_runs = []
+    
+    for i in range(1, len(selected_indices)):
+        gap = selected_indices[i] - selected_indices[i - 1] - 1
+        
+        # Check max_gap_between_periods
+        if gap > max_gap_between_periods:
+            return False, f"Gap of {gap} periods between index {selected_indices[i-1]} and {selected_indices[i]}, but max_gap_between_periods is {max_gap_between_periods}"
+        
+        # Track consecutive runs
+        if selected_indices[i] == selected_indices[i - 1] + 1:
+            consecutive_run_length += 1
+        else:
+            # End of a run
+            consecutive_runs.append((selected_indices[i - consecutive_run_length], consecutive_run_length))
+            consecutive_run_length = 1
+    
+    # Add the last run
+    consecutive_runs.append((selected_indices[len(selected_indices) - consecutive_run_length], consecutive_run_length))
+    
+    # Check min_consecutive_periods for all runs except possibly the last one
+    for i, (start_idx, run_length) in enumerate(consecutive_runs):
+        is_last_run = (i == len(consecutive_runs) - 1)
+        is_at_end = (start_idx + run_length - 1) == (total_length - 1)
+        
+        # Only enforce min_consecutive_periods if it's not the last run at the end
+        if not (is_last_run and is_at_end):
+            if run_length < min_consecutive_periods:
+                return False, f"Consecutive run starting at index {start_idx} has length {run_length}, but min_consecutive_periods is {min_consecutive_periods}"
+    
+    # Check end gap
+    end_gap = total_length - 1 - selected_indices[-1]
+    if end_gap > max_gap_between_periods:
+        return False, f"End gap of {end_gap} periods after index {selected_indices[-1]}, but max_gap_between_periods is {max_gap_between_periods}"
+    
+    return True, "All constraints met"
+
+
 def generate_realistic_daily_pattern() -> list[Decimal]:
     """
     Generate a realistic daily electricity price pattern (96 items = 24 hours * 4).
@@ -1899,6 +1964,123 @@ def main():
                 "aggressive": False,
             },
         },
+        {
+            "name": "custom_minimal_constraints",
+            "prices": [
+                Decimal("9.824"),
+                Decimal("8.534"),
+                Decimal("7.981"),
+                Decimal("7.296"),
+                Decimal("8.586"),
+                Decimal("7.75"),
+                Decimal("7.523"),
+                Decimal("7.027"),
+                Decimal("6.923"),
+                Decimal("6.718"),
+                Decimal("6.447"),
+                Decimal("6.061"),
+                Decimal("6.182"),
+                Decimal("5.652"),
+                Decimal("5.188"),
+                Decimal("4.957"),
+                Decimal("5.665"),
+                Decimal("5.2"),
+                Decimal("5.159"),
+                Decimal("4.991"),
+                Decimal("5.262"),
+                Decimal("5.2"),
+                Decimal("5.228"),
+                Decimal("5.2"),
+                Decimal("4.88"),
+                Decimal("4.965"),
+                Decimal("5.366"),
+                Decimal("5.79"),
+                Decimal("6.009"),
+                Decimal("6.695"),
+                Decimal("6.78"),
+                Decimal("6.974"),
+                Decimal("6.824"),
+                Decimal("7.085"),
+                Decimal("7.173"),
+                Decimal("7.226"),
+                Decimal("7.125"),
+                Decimal("7.254"),
+                Decimal("7.83"),
+                Decimal("9.228"),
+                Decimal("9.318"),
+                Decimal("9.838"),
+                Decimal("8.972"),
+                Decimal("8.961"),
+                Decimal("9.421"),
+                Decimal("9.189"),
+                Decimal("9.01"),
+                Decimal("8.494"),
+                Decimal("9.777"),
+                Decimal("8.982"),
+                Decimal("8.723"),
+                Decimal("8.274"),
+                Decimal("8.569"),
+                Decimal("8.393"),
+                Decimal("8.205"),
+                Decimal("8.0"),
+                Decimal("8.33"),
+                Decimal("8.2"),
+                Decimal("8.2"),
+                Decimal("8.489"),
+                Decimal("8.31"),
+                Decimal("9.928"),
+                Decimal("11.565"),
+                Decimal("14.995"),
+                Decimal("8.423"),
+                Decimal("10.567"),
+                Decimal("15.13"),
+                Decimal("18.988"),
+                Decimal("11.047"),
+                Decimal("13.994"),
+                Decimal("14.999"),
+                Decimal("15.004"),
+                Decimal("14.999"),
+                Decimal("16.852"),
+                Decimal("15.695"),
+                Decimal("17.173"),
+                Decimal("13.695"),
+                Decimal("13.788"),
+                Decimal("14.999"),
+                Decimal("17.025"),
+                Decimal("14.653"),
+                Decimal("15.69"),
+                Decimal("15.453"),
+                Decimal("15.004"),
+                Decimal("16.784"),
+                Decimal("15.297"),
+                Decimal("13.152"),
+                Decimal("10.767"),
+                Decimal("15.595"),
+                Decimal("13.405"),
+                Decimal("12.563"),
+                Decimal("10.999"),
+                Decimal("14.628"),
+                Decimal("14.997"),
+                Decimal("12.029"),
+                Decimal("10.311"),
+                Decimal("14.69"),
+                Decimal("11.0"),
+                Decimal("10.682"),
+                Decimal("9.922"),
+                Decimal("10.872"),
+                Decimal("8.515"),
+                Decimal("8.154"),
+                Decimal("7.119"),
+            ],
+            "params": {
+                "low_price_threshold": Decimal("5.88"),
+                "min_selections": 1,
+                "min_consecutive_periods": 1,
+                "max_gap_between_periods": 24,
+                "max_gap_from_start": 23,
+                "aggressive": False,
+            },
+        },
     ]
 
     print(f"Generating {len(scenarios)} test scenarios...")
@@ -1922,43 +2104,79 @@ def main():
         params = scenario["params"].copy()
         aggressive = params.pop("aggressive", True)
 
-        try:
-            # Run algorithm
-            selected = get_cheapest_periods(
-                prices=prices,
-                aggressive=aggressive,
-                **params,
-            )
+        # Run algorithm
+        selected = get_cheapest_periods(
+            prices=prices,
+            aggressive=aggressive,
+            **params,
+        )
 
-            # Create visualization
-            title = scenario["name"].replace("_", " ").title()
-            filename = f"{scenario['name']}.png"
+        # Validate constraints
+        is_valid, error_message = validate_constraints(
+            selected_indices=selected,
+            total_length=len(prices),
+            min_consecutive_periods=params["min_consecutive_periods"],
+            max_gap_between_periods=params["max_gap_between_periods"],
+            max_gap_from_start=params["max_gap_from_start"],
+            min_selections=params["min_selections"],
+        )
 
-            visualize_scenario(
-                prices=prices,
-                selected_indices=selected,
-                title=title,
-                filename=filename,
-                output_dir=output_dir,
-                low_price_threshold=params["low_price_threshold"],
-                min_selections=params["min_selections"],
-                min_consecutive_periods=params["min_consecutive_periods"],
-                max_gap_between_periods=params["max_gap_between_periods"],
-                max_gap_from_start=params["max_gap_from_start"],
-                aggressive=aggressive,
-            )
+        if not is_valid:
+            # Print detailed diagnostic information
+            print(f"  ❌ CONSTRAINT VIOLATION DETECTED!")
+            print(f"     Error: {error_message}")
+            print(f"     Selected indices: {selected}")
+            
+            # Analyze consecutive runs
+            consecutive_runs = []
+            if selected:
+                run_start = selected[0]
+                run_length = 1
+                
+                for i in range(1, len(selected)):
+                    if selected[i] == selected[i-1] + 1:
+                        run_length += 1
+                    else:
+                        consecutive_runs.append((run_start, run_length))
+                        run_start = selected[i]
+                        run_length = 1
+                
+                consecutive_runs.append((run_start, run_length))
+                
+                print(f"     Consecutive runs found: {len(consecutive_runs)}")
+                for start, length in consecutive_runs:
+                    status = "✓" if length >= params["min_consecutive_periods"] or (start + length - 1 == len(prices) - 1) else "✗"
+                    at_end = "(at end)" if (start + length - 1 == len(prices) - 1) else ""
+                    print(f"       {status} Start: {start}, Length: {length} {at_end}")
+            
+            raise ValueError(f"Constraint validation failed: {error_message}")
 
-            # Print summary
-            total_cost = sum(prices[i] for i in selected)
-            avg_cost = total_cost / len(selected) if selected else Decimal(0)
-            print(
-                f"  Selected {len(selected)} periods, "
-                f"Total cost: {total_cost:.2f}, "
-                f"Avg cost: {avg_cost:.4f}\n"
-            )
+        # Create visualization
+        title = scenario["name"].replace("_", " ").title()
+        filename = f"{scenario['name']}.png"
 
-        except Exception as e:
-            print(f"  ERROR: {e}\n")
+        visualize_scenario(
+            prices=prices,
+            selected_indices=selected,
+            title=title,
+            filename=filename,
+            output_dir=output_dir,
+            low_price_threshold=params["low_price_threshold"],
+            min_selections=params["min_selections"],
+            min_consecutive_periods=params["min_consecutive_periods"],
+            max_gap_between_periods=params["max_gap_between_periods"],
+            max_gap_from_start=params["max_gap_from_start"],
+            aggressive=aggressive,
+        )
+
+        # Print summary
+        total_cost = sum(prices[i] for i in selected)
+        avg_cost = total_cost / len(selected) if selected else Decimal(0)
+        print(
+            f"  Selected {len(selected)} periods, "
+            f"Total cost: {total_cost:.2f}, "
+            f"Avg cost: {avg_cost:.4f}\n"
+        )
 
     print(f"\nAll visualizations saved to: {output_dir.absolute()}")
 

@@ -239,20 +239,21 @@ def _try_chunk_selection(
     max_gap_between_periods: int,
     max_gap_from_start: int,
     aggressive: bool,
-) -> list[int] | None:
-    """Try to get a valid chunk selection, return None if not possible."""
-    try:
-        return _get_cheapest_periods(
-            chunk_prices,
-            low_price_threshold,
-            target,
-            min_consecutive_periods,
-            max_gap_between_periods,
-            max_gap_from_start,
-            aggressive,
-        )
-    except ValueError:
-        return None
+) -> list[int]:
+    """
+    Get a valid chunk selection.
+    
+    Raises ValueError if no valid selection can be found with the given constraints.
+    """
+    return _get_cheapest_periods(
+        chunk_prices,
+        low_price_threshold,
+        target,
+        min_consecutive_periods,
+        max_gap_between_periods,
+        max_gap_from_start,
+        aggressive,
+    )
 
 
 def _find_best_chunk_selection_with_lookahead(
@@ -285,25 +286,9 @@ def _find_best_chunk_selection_with_lookahead(
     if target == 0:
         return []
 
-    # Check if we can skip this chunk entirely if it's mostly expensive
-    # and we can reach the next chunk within max_gap
-    cheap_items_in_chunk = sum(1 for p in chunk_prices if p <= low_price_threshold)
-    chunk_is_mostly_expensive = cheap_items_in_chunk < min_consecutive_periods
-    
-    if chunk_is_mostly_expensive and next_chunk_prices is not None:
-        # Check if next chunk has cheap items we can select instead
-        next_chunk_cheap_items = sum(1 for p in next_chunk_prices if p <= low_price_threshold)
-        if next_chunk_cheap_items >= min_consecutive_periods:
-            # Check if we can skip this chunk (gap from previous selection to next chunk)
-            # This is a heuristic - if max_gap is large enough, we can likely skip
-            # The actual gap check happens at the chunk boundary level
-            if max_gap_between_periods >= chunk_len:
-                # Can skip this expensive chunk - return empty selection
-                return []
-
     # If there's no next chunk, just find the best selection for this chunk
     if next_chunk_prices is None:
-        result = _try_chunk_selection(
+        return _try_chunk_selection(
             chunk_prices,
             low_price_threshold,
             target,
@@ -312,24 +297,6 @@ def _find_best_chunk_selection_with_lookahead(
             max_gap_from_start,
             aggressive,
         )
-        if result:
-            return result
-        # Fallback attempts
-        for fallback_target in [min_consecutive_periods, 1]:
-            result = _try_chunk_selection(
-                chunk_prices,
-                low_price_threshold,
-                min(fallback_target, chunk_len),
-                min(fallback_target, min_consecutive_periods),
-                max_gap_between_periods,
-                max_gap_from_start,
-                aggressive,
-            )
-            if result:
-                return result
-        # Last resort
-        sorted_by_price = sorted(range(chunk_len), key=lambda i: chunk_prices[i])
-        return sorted(sorted_by_price[:min_consecutive_periods])
 
     # With look-ahead: try multiple strategies and pick the best combined cost
     # Store: (selection, cost_metric) where cost_metric depends on mode
@@ -337,60 +304,17 @@ def _find_best_chunk_selection_with_lookahead(
     # For conservative: (cheap_count, total_cost) tuple for comparison
     candidates: list[tuple[list[int], Decimal | tuple[int, Decimal]]] = []
 
-    # Strategy 0: Skip expensive chunk if max_gap allows and next chunk has cheap items
-    cheap_items_in_chunk = sum(1 for p in chunk_prices if p <= low_price_threshold)
-    chunk_is_mostly_expensive = cheap_items_in_chunk < min_consecutive_periods
-    
-    if chunk_is_mostly_expensive and next_chunk_prices is not None:
-        # Check if next chunk has enough cheap items
-        next_chunk_cheap_items = sum(1 for p in next_chunk_prices if p <= low_price_threshold)
-        if next_chunk_cheap_items >= min_consecutive_periods:
-            # Check if we can skip this chunk (gap constraint allows it)
-            # If max_gap is at least chunk_len, we can skip the entire chunk
-            if max_gap_between_periods >= chunk_len:
-                # Try selecting from next chunk instead
-                # This simulates skipping current chunk and selecting from next
-                skip_selection = []  # Empty selection for current chunk
-                # Estimate cost of selecting from next chunk
-                # Find cheapest items in next chunk
-                next_chunk_cheap_indices = [
-                    i for i, p in enumerate(next_chunk_prices)
-                    if p <= low_price_threshold
-                ]
-                next_chunk_cheap_indices.sort(key=lambda i: next_chunk_prices[i])
-                # Take enough to form a valid block
-                estimated_next_selection = next_chunk_cheap_indices[:min_consecutive_periods]
-                estimated_next_cost = sum(
-                    (next_chunk_prices[i] for i in estimated_next_selection), Decimal(0)
-                )
-                
-                # Cost of skipping: 0 for current chunk + estimated cost for next
-                skip_cost = estimated_next_cost
-                
-                if aggressive:
-                    # For aggressive, compare average cost
-                    # Since we're skipping current chunk, we need to compare with
-                    # what we would have selected in current chunk
-                    # Use estimated cost per item from next chunk
-                    if estimated_next_selection:
-                        avg_skip_cost = skip_cost / Decimal(len(estimated_next_selection))
-                        candidates.append((skip_selection, avg_skip_cost))
-                else:
-                    # For conservative, prefer skipping expensive chunks
-                    # Use (cheap_count=0 for current, but next has cheap items, low cost)
-                    candidates.append((skip_selection, (0, skip_cost)))
-
     # Strategy 1: Standard selection (locally optimal)
-    selection = _try_chunk_selection(
-        chunk_prices,
-        low_price_threshold,
-        target,
-        min_consecutive_periods,
-        max_gap_between_periods,
-        max_gap_from_start,
-        aggressive,
-    )
-    if selection:
+    try:
+        selection = _try_chunk_selection(
+            chunk_prices,
+            low_price_threshold,
+            target,
+            min_consecutive_periods,
+            max_gap_between_periods,
+            max_gap_from_start,
+            aggressive,
+        )
         boundary = _calculate_chunk_boundary_state(selection, chunk_len)
         chunk_cost: Decimal = sum((chunk_prices[i] for i in selection), Decimal(0))
         forced_cost = _estimate_forced_prefix_cost(
@@ -408,6 +332,9 @@ def _find_best_chunk_selection_with_lookahead(
                 1 for i in selection if chunk_prices[i] <= low_price_threshold
             )
             candidates.append((selection, (cheap_count, total_cost)))
+    except ValueError:
+        # Strategy 1 failed, try other strategies
+        pass
 
     # Strategy 2: Try to end with a complete block (avoid forcing next chunk)
     # This means selecting items up to the end of the chunk
@@ -415,16 +342,19 @@ def _find_best_chunk_selection_with_lookahead(
         # Try selecting more items to reach the end
         for extra in range(1, min(min_consecutive_periods + 1, chunk_len - target + 1)):
             extended_target = min(target + extra, chunk_len)
-            selection = _try_chunk_selection(
-                chunk_prices,
-                low_price_threshold,
-                extended_target,
-                min_consecutive_periods,
-                max_gap_between_periods,
-                max_gap_from_start,
-                aggressive,
-            )
-            if selection and max(selection) == chunk_len - 1:
+            try:
+                selection = _try_chunk_selection(
+                    chunk_prices,
+                    low_price_threshold,
+                    extended_target,
+                    min_consecutive_periods,
+                    max_gap_between_periods,
+                    max_gap_from_start,
+                    aggressive,
+                )
+            except ValueError:
+                continue
+            if max(selection) == chunk_len - 1:
                 # This selection ends at the chunk boundary
                 boundary = _calculate_chunk_boundary_state(selection, chunk_len)
                 # Check if it creates a complete block at the end
@@ -455,15 +385,18 @@ def _find_best_chunk_selection_with_lookahead(
         # Make the last item very expensive to discourage selecting it
         adjusted_prices[-1] = Decimal("999999999")
 
-        selection = _try_chunk_selection(
-            adjusted_prices,
-            low_price_threshold,
-            target,
-            min_consecutive_periods,
-            max_gap_between_periods,
-            max_gap_from_start,
-            aggressive,
-        )
+        try:
+            selection = _try_chunk_selection(
+                adjusted_prices,
+                low_price_threshold,
+                target,
+                min_consecutive_periods,
+                max_gap_between_periods,
+                max_gap_from_start,
+                aggressive,
+            )
+        except ValueError:
+            selection = []
         if selection and chunk_len - 1 not in selection:
             # Verify the gap at end is acceptable
             last_selected = max(selection)
@@ -513,48 +446,14 @@ def _find_best_chunk_selection_with_lookahead(
                     )
                     candidates.append((selection, (cheap_count, total_cost)))
 
-    # If no candidates, use fallback
+    # If no candidates, fail fast - cannot satisfy constraints
     if not candidates:
-        # Try with relaxed constraints
-        for fallback_target in [min_consecutive_periods, 1]:
-            selection = _try_chunk_selection(
-                chunk_prices,
-                low_price_threshold,
-                min(fallback_target, chunk_len),
-                min(fallback_target, chunk_len),
-                max_gap_between_periods,
-                chunk_len,  # Relaxed gap from start
-                aggressive,
-            )
-            if selection:
-                fallback_cost: Decimal = sum(
-                    (chunk_prices[i] for i in selection), Decimal(0)
-                )
-                if aggressive:
-                    avg_cost = fallback_cost / Decimal(len(selection))
-                    candidates.append((selection, avg_cost))
-                else:
-                    cheap_count = sum(
-                        1 for i in selection if chunk_prices[i] <= low_price_threshold
-                    )
-                    candidates.append((selection, (cheap_count, fallback_cost)))
-                break
-
-    if not candidates:
-        # Last resort
-        sorted_by_price = sorted(range(chunk_len), key=lambda i: chunk_prices[i])
-        selection = sorted(sorted_by_price[:min_consecutive_periods])
-        last_resort_cost: Decimal = sum(
-            (chunk_prices[i] for i in selection), Decimal(0)
+        raise ValueError(
+            f"Cannot find valid selection in chunk with look-ahead: "
+            f"target={target}, min_consecutive_periods={min_consecutive_periods}, "
+            f"chunk_len={chunk_len}, "
+            f"cheap_items={sum(1 for p in chunk_prices if p <= low_price_threshold)}"
         )
-        if aggressive:
-            avg_cost = last_resort_cost / Decimal(len(selection))
-            candidates.append((selection, avg_cost))
-        else:
-            cheap_count = sum(
-                1 for i in selection if chunk_prices[i] <= low_price_threshold
-            )
-            candidates.append((selection, (cheap_count, last_resort_cost)))
 
     # Pick the best candidate based on mode
     if aggressive:
@@ -926,7 +825,6 @@ def get_cheapest_periods_extended(
     # Get rough selection pattern
     # If we have more than 28 averages, chunk them for brute-force processing
     if len(averages) > 28:
-        # Split into chunks of max 20 averages to stay under the 28-item limit
         ROUGH_CHUNK_SIZE = 20
         rough_selected = []
         
@@ -962,33 +860,36 @@ def get_cheapest_periods_extended(
         rough_selected = sorted(rough_selected)
     else:
         # Original logic for <=28 averages
-        try:
-            rough_selected = _get_cheapest_periods(
-                averages,
-                low_price_threshold,
-                rough_min_selections,
-                rough_min_consecutive,
-                rough_max_gap,
-                rough_max_gap_start,
-                aggressive,
-            )
-        except ValueError:
-            # If rough planning fails with scaled constraints, try more lenient
+        # For rough planning with many items, use a heuristic instead of exhaustive search
+        # The rough plan doesn't need to be perfect - it just needs to guide the fine-grained phase
+        # If we have > 20 items and the search would expand exponentially, use a simpler approach
+        if len(averages) > 20:
+            # Simple heuristic: distribute selections proportionally across cheap groups
+            # Find the cheapest items that are approximately equally distributed
+            indexed_averages = list(enumerate(averages))
+            # Sort by price to prioritize cheap items
+            indexed_averages.sort(key=lambda x: x[1])
+            # Select roughly the right number, trying to space them out
+            rough_selected = sorted([idx for idx, _ in indexed_averages[:max(rough_min_selections, 1)]])
+        else:
+            # For smaller sets, try to use the exact algorithm
+            # If this fails, fall back to the heuristic (which is reasonable for rough planning)
             try:
                 rough_selected = _get_cheapest_periods(
                     averages,
                     low_price_threshold,
                     rough_min_selections,
-                    1,  # min_consecutive = 1
-                    len(averages),  # max_gap = all
-                    len(averages),  # max_gap_start = all
+                    rough_min_consecutive,
+                    rough_max_gap,
+                    rough_max_gap_start,
                     aggressive,
                 )
             except ValueError:
-                # Last resort: select only cheap average groups
-                rough_selected = [
-                    i for i, avg in enumerate(averages) if avg <= low_price_threshold
-                ]
+                # For rough planning, if exact algorithm fails, use heuristic
+                # This is acceptable because rough planning is just guidance
+                indexed_averages = list(enumerate(averages))
+                indexed_averages.sort(key=lambda x: x[1])
+                rough_selected = sorted([idx for idx, _ in indexed_averages[:max(rough_min_selections, 1)]])
 
     # Phase 2: Fine-grained planning
     # Calculate target selections per chunk based on rough plan
@@ -1059,28 +960,21 @@ def get_cheapest_periods_extended(
                     0, max_gap_between_periods - prev_state.trailing_unselected_count
                 )
 
-        # Calculate target selections for this chunk
+        # Calculate target selections for this chunk based on rough planning
         target = chunk_selection_targets[chunk_idx]
-        # For the first chunk, if target=0 and max_gap_from_start allows waiting
-        # until the next chunk, we can allow target=0 to skip expensive periods
-        if chunk_idx == 0 and target == 0:
-            # Check if we can wait until next chunk without violating max_gap_from_start
-            if chunk_idx + 1 < num_chunks:
+        
+        # For chunks with target=0, allow skipping if gap constraints permit
+        if target == 0:
+            if chunk_idx == 0 and chunk_idx + 1 < num_chunks:
                 next_chunk_start = (chunk_idx + 1) * MAX_CHUNK_SIZE
-                if next_chunk_start <= max_gap_from_start:
-                    # Can wait until next chunk - allow target=0
-                    target = 0
-                else:
-                    # Must select something in this chunk to satisfy max_gap_from_start
-                    target = max(target, min_consecutive_periods)
-            else:
-                # This is the last chunk, must select something
-                target = max(target, min_consecutive_periods)
-        else:
-            # For non-first chunks or when target > 0, enforce min_consecutive
-            target = max(target, min_consecutive_periods)  # At least min_consecutive
-        target = max(target, forced_prefix_length)  # At least forced prefix
-        target = min(target, chunk_len)  # Can't exceed chunk size
+                if next_chunk_start > max_gap_from_start:
+                    # Can't skip - would violate max_gap_from_start
+                    target = min(min_consecutive_periods, chunk_len)
+        
+        # Respect forced prefix requirement
+        target = max(target, forced_prefix_length)
+        # Can't exceed chunk size
+        target = min(target, chunk_len)
 
         # Handle forced prefix selections
         forced_selections = list(range(forced_prefix_length))
@@ -1092,9 +986,9 @@ def get_cheapest_periods_extended(
             # Some items forced, process the rest with look-ahead
             remaining_start = forced_prefix_length
             remaining_prices = chunk_prices[remaining_start:]
-            remaining_target = max(
-                min_consecutive_periods, target - forced_prefix_length
-            )
+            remaining_target = target - forced_prefix_length
+            
+            # Can't select more than what's available
             remaining_target = min(remaining_target, len(remaining_prices))
 
             if len(remaining_prices) > 0 and remaining_target > 0:
@@ -1114,27 +1008,9 @@ def get_cheapest_periods_extended(
                     i + remaining_start for i in remaining_selected
                 ]
             else:
-                # Only forced prefix - this should not happen if target enforcement worked correctly
-                # But if it does, we need to ensure we meet min_consecutive_periods
-                # The forced prefix should already be sized to complete the previous chunk's block
-                # So forced_prefix_length should be sufficient, but let's verify
-                if forced_prefix_length < min_consecutive_periods and len(remaining_prices) > 0:
-                    # This is a problem - forced prefix is too short
-                    # This shouldn't happen if the algorithm is working correctly
-                    # But as a safety, try to extend it minimally
-                    items_needed = min_consecutive_periods - forced_prefix_length
-                    sorted_remaining = sorted(
-                        range(len(remaining_prices)),
-                        key=lambda i: remaining_prices[i]
-                    )
-                    # Only add the minimum needed, not more
-                    additional = []
-                    for i in range(min(items_needed, len(sorted_remaining))):
-                        additional.append(remaining_start + sorted_remaining[i])
-                    chunk_selected = forced_selections + additional
-                    chunk_selected = sorted(set(chunk_selected))
-                else:
-                    chunk_selected = forced_selections
+                # remaining_target is 0 or remaining_prices is empty
+                # Use only the forced prefix
+                chunk_selected = forced_selections
         else:
             # No forced prefix - use look-ahead optimization to find best selection
             chunk_selected = _find_best_chunk_selection_with_lookahead(
@@ -1147,22 +1023,6 @@ def get_cheapest_periods_extended(
                 adjusted_max_gap_start,
                 aggressive,
             )
-
-        # Validate that chunk selection meets minimum requirements
-        # If target was enforced to min_consecutive_periods, we must have at least that many
-        if target >= min_consecutive_periods and len(chunk_selected) < min_consecutive_periods:
-            # Selection is too small - try to extend it
-            # This should not happen if the selection logic is working correctly,
-            # but as a safety measure, add cheapest items to meet the minimum
-            unselected_in_chunk = [
-                i for i in range(chunk_len) if i not in chunk_selected
-            ]
-            if unselected_in_chunk:
-                unselected_in_chunk.sort(key=lambda i: chunk_prices[i])
-                items_needed = min_consecutive_periods - len(chunk_selected)
-                for i in range(min(items_needed, len(unselected_in_chunk))):
-                    chunk_selected.append(unselected_in_chunk[i])
-                chunk_selected = sorted(set(chunk_selected))
 
         # Convert to global indices and add to result
         for local_idx in chunk_selected:
@@ -1182,15 +1042,13 @@ def get_cheapest_periods_extended(
         max_gap_between_periods,
         max_gap_from_start,
     ):
-        # If validation fails, try a repair pass
-        all_selected = _repair_selection(
-            all_selected,
-            prices,
-            low_price_threshold,
-            min_selections,
-            min_consecutive_periods,
-            max_gap_between_periods,
-            max_gap_from_start,
+        # Fail fast: do not attempt to repair constraint violations
+        raise ValueError(
+            f"Selection does not meet constraints. "
+            f"Total periods: {n}, Selections: {len(all_selected)}, "
+            f"min_consecutive_periods: {min_consecutive_periods}, "
+            f"max_gap_between_periods: {max_gap_between_periods}, "
+            f"max_gap_from_start: {max_gap_from_start}"
         )
 
     return all_selected

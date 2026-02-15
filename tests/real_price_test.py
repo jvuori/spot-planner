@@ -148,3 +148,45 @@ def test_2025_10_02():
     )
     # Algorithm selects cheapest items that meet constraints
     assert periods == [4, 10, 15, 21, 22, 23]  # Cheapest 6 items below threshold
+
+
+PRICES_2026_02_15_HANG_TEST = [
+    5.153, 4.999, 5.0, 4.702, 4.151, 3.499, 7.894, 7.279, 6.365, 5.77,
+    5.771, 5.511, 5.0, 4.999, 4.999, 4.5, 4.295, 4.029, 4.04, 4.101,
+    4.114, 4.3, 4.516, 4.999, 4.999, 5.0, 5.0, 5.746, 6.12, 6.889,
+    7.656, 8.471, 10.477, 9.962, 7.271, 9.37, 10.168, 10.3, 9.103, 9.29,
+    9.259, 9.587, 9.053, 9.251, 9.444, 9.255, 10.216, 9.161, 8.773, 14.999,
+    8.762, 11.004, 11.829, 11.999, 14.999, 13.193, 8.898, 6.911, 12.999, 8.852,
+    8.135, 7.413, 8.239, 7.322, 6.999, 7.616, 6.787, 7.276, 7.608, 8.327,
+    8.181, 8.212, 8.355, 8.425, 9.527, 10.501, 9.899, 9.334, 9.008, 8.361,
+    7.712, 7.225, 7.552, 6.295, 5.033, 4.3, 3.5, 3.219, 3.164, 2.999,
+    3.219, 3.187, 3.029, 2.977, 2.947, 2.796, 2.644, 2.471, 2.688, 2.524,
+    2.392, 2.313,
+]
+
+
+def test_2026_02_15_hang_test():
+    """
+    Test case from 2026-02-15 that potentially causes hung planning.
+    
+    Client reported: spot_planner never completes and consumes 100% CPU.
+    
+    Input parameters:
+    - 98 price points
+    - low_price_threshold=6.295
+    - min_selections=45 (need to select 45 periods)
+    - min_consecutive_periods=4 (periods must be in chunks of at least 4)
+    - max_gap_between_periods=36 (max gap between selections)
+    - max_gap_from_start=36 (max gap from start)
+    """
+    periods = get_cheapest_periods(
+        prices=[Decimal(price) for price in PRICES_2026_02_15_HANG_TEST],
+        low_price_threshold=Decimal("6.295"),
+        min_selections=45,
+        min_consecutive_periods=4,
+        max_gap_between_periods=36,
+        max_gap_from_start=36,
+    )
+    # Test that the algorithm completes without hanging
+    assert isinstance(periods, list)
+    assert len(periods) >= 45  # Should have at least min_selections
