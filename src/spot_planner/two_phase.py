@@ -867,10 +867,120 @@ def get_cheapest_periods_extended(
             # Simple heuristic: distribute selections proportionally across cheap groups
             # Find the cheapest items that are approximately equally distributed
             indexed_averages = list(enumerate(averages))
-            # Sort by price to prioritize cheap items
-            indexed_averages.sort(key=lambda x: x[1])
-            # Select roughly the right number, trying to space them out
-            rough_selected = sorted([idx for idx, _ in indexed_averages[:max(rough_min_selections, 1)]])
+            # Use a greedy gap-aware forward-selection approach
+            # This maintains connectivity while preferring cheap items
+            rough_selected = []
+            current_pos = -1  # Start before the first group
+            indexed_averages.sort(key=lambda x: x[1])  # Sort by price
+            
+            while current_pos < len(averages) - 1:
+                # Determine the search window: next rough_max_gap positions
+                window_start = current_pos + 1
+                window_end = min(current_pos + 1 + rough_max_gap, len(averages) - 1)
+                
+                # Special case for start: respect max_gap_from_start
+                if current_pos == -1:
+                    window_end = min(rough_max_gap_start, len(averages) - 1)
+               
+                # Find cheapest group in the window
+                candidates_in_window = [
+                    (idx, price) for idx, price in indexed_averages
+                    if window_start <= idx <= window_end
+                ]
+                
+                if not candidates_in_window:
+                    # No candidates in window - need to expand search or stop
+                    # Try to jump to the cheapest available group beyond the window
+                    candidates_beyond = [
+                        (idx, price) for idx, price in indexed_averages
+                        if idx > window_end and idx not in rough_selected
+                    ]
+                    if candidates_beyond:
+                        best_beyond = min(candidates_beyond, key=lambda x: x[1])
+                        rough_selected.append(best_beyond[0])
+                        current_pos = best_beyond[0]
+                    else:
+                        break  # Reached the end
+                else:
+                    # Select the cheapest in the window
+                    best_in_window = min(candidates_in_window, key=lambda x: x[1])
+                    if best_in_window[0] not in rough_selected:
+                        rough_selected.append(best_in_window[0])
+                    current_pos = best_in_window[0]
+                
+                # Safety: don't select more than reasonable amount
+                if len(rough_selected) >= len(averages) // 2:
+                    break
+            
+            rough_selected = sorted(set(rough_selected))
+            
+            # Ensure we selected at least the minimum
+            if len(rough_selected) < rough_min_selections:
+                # Add cheapest remaining groups
+                remaining = [
+                    (idx, price) for idx, price in indexed_averages
+                    if idx not in rough_selected
+                ]
+                remaining.sort(key=lambda x: x[1])
+                for idx, _ in remaining[:rough_min_selections - len(rough_selected)]:
+                    rough_selected.append(idx)
+                rough_selected = sorted(rough_selected)
+            
+            # CRITICAL: Ensure start gap constraint is respected
+            # The first selected group must not exceed rough_max_gap_start
+            if rough_selected and rough_selected[0] > rough_max_gap_start:
+                # Need to add a selection near the start
+                candidates_at_start = [
+                    (idx, price) for idx, price in indexed_averages
+                    if idx <= rough_max_gap_start and idx not in rough_selected
+                ]
+                if candidates_at_start:
+                    # Add the cheapest near-start group
+                    best_at_start = min(candidates_at_start, key=lambda x: x[1])
+                    rough_selected.append(best_at_start[0])
+                    rough_selected = sorted(rough_selected)
+            
+            # CRITICAL: Ensure end gap constraint is respected
+            # The last selected average group must be close enough to the end
+            if rough_selected:
+                last_selected_avg = rough_selected[-1]
+                # How far is the last selected group from the end (in average units)?
+                gap_from_end_in_avgs = len(averages) - 1 - last_selected_avg
+                # If gap exceeds rough_max_gap, need to add groups near the end
+                if gap_from_end_in_avgs > rough_max_gap:
+                    # Find cheapest groups near the end that would satisfy constraint
+                    # Need to select something within rough_max_gap of the end
+                    min_required_avg_idx = len(averages) - 1 - rough_max_gap
+                    # Find cheapest average in the required range that's not already selected
+                    candidates_near_end = [
+                        (idx, price) for idx, price in indexed_averages
+                        if idx >= min_required_avg_idx and idx not in rough_selected
+                    ]
+                    if candidates_near_end:
+                        # Add the cheapest near-end group
+                        best_near_end = min(candidates_near_end, key=lambda x: x[1])
+                        rough_selected.append(best_near_end[0])
+                        rough_selected = sorted(rough_selected)
+            
+            # CRITICAL: Bridge large gaps between selected groups
+            # Ensure no gaps between selected groups exceed rough_max_gap
+            if rough_selected:
+                bridged_selected = []
+                for idx in rough_selected:
+                    if bridged_selected:
+                        prev_idx = bridged_selected[-1]
+                        gap = idx - prev_idx - 1
+                        if gap > rough_max_gap:
+                            # Need to bridge the gap - find cheapest group in the gap
+                            candidates_in_gap = [
+                                (i, price) for i, price in indexed_averages
+                                if prev_idx < i < idx and i not in rough_selected and i not in bridged_selected
+                            ]
+                            if candidates_in_gap:
+                                best_bridge = min(candidates_in_gap, key=lambda x: x[1])
+                                bridged_selected.append(best_bridge[0])
+                    bridged_selected.append(idx)
+                rough_selected = sorted(bridged_selected)
         else:
             # For smaller sets, try to use the exact algorithm
             # If this fails, fall back to the heuristic (which is reasonable for rough planning)
@@ -890,6 +1000,54 @@ def get_cheapest_periods_extended(
                 indexed_averages = list(enumerate(averages))
                 indexed_averages.sort(key=lambda x: x[1])
                 rough_selected = sorted([idx for idx, _ in indexed_averages[:max(rough_min_selections, 1)]])
+                
+                # CRITICAL: Bridge large gaps ONCE
+                bridged_selected = []
+                for idx in rough_selected:
+                    if bridged_selected:
+                        prev_idx = bridged_selected[-1]
+                        gap = idx - prev_idx - 1
+                        if gap > rough_max_gap:
+                            candidates_in_gap = [
+                                (i, price) for i, price in indexed_averages
+                                if prev_idx < i < idx and i not in rough_selected and i not in bridged_selected
+                            ]
+                            if candidates_in_gap:
+                                best_bridge = min(candidates_in_gap, key=lambda x: x[1])
+                                bridged_selected.append(best_bridge[0])
+                    bridged_selected.append(idx)
+                
+                rough_selected = sorted(bridged_selected)
+                
+                # CRITICAL: Ensure end gap constraint is respected
+                if rough_selected:
+                    last_selected_avg = rough_selected[-1]
+                    gap_from_end_in_avgs = len(averages) - 1 - last_selected_avg
+                    if gap_from_end_in_avgs > rough_max_gap:
+                        min_required_avg_idx = len(averages) - 1 - rough_max_gap
+                        candidates_near_end = [
+                            (i, price) for i, price in indexed_averages
+                            if i >= min_required_avg_idx and i not in rough_selected
+                        ]
+                        if candidates_near_end:
+                            best_near_end = min(candidates_near_end, key=lambda x: x[1])
+                            rough_selected.append(best_near_end[0])
+                            rough_selected = sorted(rough_selected)
+                           
+                            # Bridge the gap once
+                            if len(rough_selected) >= 2:
+                                last_main = rough_selected[-2]
+                                near_end_idx = rough_selected[-1]
+                                gap = near_end_idx - last_main - 1
+                                if gap > rough_max_gap:
+                                    candidates_in_gap = [
+                                        (i, price) for i, price in indexed_averages
+                                        if last_main < i < near_end_idx and i not in rough_selected
+                                    ]
+                                    if candidates_in_gap:
+                                        best_bridge = min(candidates_in_gap, key=lambda x: x[1])
+                                        rough_selected.append(best_bridge[0])
+                                        rough_selected = sorted(rough_selected)
 
     # Phase 2: Fine-grained planning
     # Calculate target selections per chunk based on rough plan
@@ -918,6 +1076,16 @@ def get_cheapest_periods_extended(
         remaining = min_selections - total_target
         for i in range(remaining):
             chunk_selection_targets[i % num_chunks] += 1
+    
+    # Ensure chunk 0 respects max_gap_from_start constraint
+    # Rough planning works in average space, but max_gap_from_start is in price index space.
+    # We only need to force selections in chunk 0 if:
+    # 1. The first rough selected average starts at or beyond max_gap_from_start
+    # 2. chunk 0 has no target from the rough plan
+    if chunk_selection_targets[0] == 0 and rough_selected:
+        first_rough_start = group_ranges[rough_selected[0]][0]  # Start price index of first rough selection
+        if first_rough_start >= max_gap_from_start:
+            chunk_selection_targets[0] = min_consecutive_periods
 
     # Process each chunk with boundary-aware constraints and look-ahead optimization
     all_selected: list[int] = []
@@ -963,6 +1131,11 @@ def get_cheapest_periods_extended(
         # Calculate target selections for this chunk based on rough planning
         target = chunk_selection_targets[chunk_idx]
         
+        # CRITICAL: If target > 0, it must be at least min_consecutive_periods
+        # to form a valid consecutive block
+        if target > 0:
+            target = max(target, min_consecutive_periods)
+        
         # For chunks with target=0, allow skipping if gap constraints permit
         if target == 0:
             if chunk_idx == 0 and chunk_idx + 1 < num_chunks:
@@ -973,8 +1146,13 @@ def get_cheapest_periods_extended(
         
         # Respect forced prefix requirement
         target = max(target, forced_prefix_length)
-        # Can't exceed chunk size
-        target = min(target, chunk_len)
+        
+        # If the chunk is too small to form a valid consecutive block, skip it
+        if chunk_len < min_consecutive_periods:
+            target = 0
+        else:
+            # Can't exceed chunk size
+            target = min(target, chunk_len)
 
         # Handle forced prefix selections
         forced_selections = list(range(forced_prefix_length))
@@ -987,6 +1165,11 @@ def get_cheapest_periods_extended(
             remaining_start = forced_prefix_length
             remaining_prices = chunk_prices[remaining_start:]
             remaining_target = target - forced_prefix_length
+            
+            # CRITICAL: If remaining_target > 0, it must be at least min_consecutive_periods
+            # to form a valid consecutive block in the remaining portion
+            if remaining_target > 0:
+                remaining_target = max(remaining_target, min_consecutive_periods)
             
             # Can't select more than what's available
             remaining_target = min(remaining_target, len(remaining_prices))
@@ -1034,17 +1217,138 @@ def get_cheapest_periods_extended(
     # Sort and validate the final result
     all_selected = sorted(set(all_selected))
 
+    # CRITICAL: Bridge any remaining large gaps between chunks
+    # This ensures gaps between different chunks don't exceed constraints
+    if all_selected:
+        bridged_selected = []
+        for idx in all_selected:
+            if bridged_selected:
+                prev_idx = bridged_selected[-1]
+                gap = idx - prev_idx - 1
+                if gap > max_gap_between_periods:
+                    # Need to bridge the gap by selecting periods in between
+                    # Find the cheapest periods in the gap that maintain connectivity
+                    gap_start = prev_idx + 1
+                    gap_end = idx - 1
+                    gap_prices = prices[gap_start:gap_end + 1]
+                    
+                    # Select the cheapest consecutive block of min_consecutive_periods in the gap
+                    if len(gap_prices) >= min_consecutive_periods:
+                        # Find the cheapest consecutive block
+                        min_cost = float('inf')
+                        best_start = None
+                        for start in range(len(gap_prices) - min_consecutive_periods + 1):
+                            cost = sum(gap_prices[start:start + min_consecutive_periods])
+                            if cost < min_cost:
+                                min_cost = cost
+                                best_start = start
+                        
+                        if best_start is not None:
+                            # Add the consecutive block
+                            for i in range(min_consecutive_periods):
+                                bridged_selected.append(gap_start + best_start + i)
+            bridged_selected.append(idx)
+        all_selected = sorted(bridged_selected)
+    
+    # Fix incomplete trailing and leading blocks
+    if all_selected:
+        # Fix trailing block
+        trailing_block_length = 1
+        for i in range(len(all_selected) - 1, 0, -1):
+            if all_selected[i] == all_selected[i - 1] + 1:
+                trailing_block_length += 1
+            else:
+                break
+        
+        if trailing_block_length < min_consecutive_periods:
+            # Try to extend the trailing block backwards
+            if len(all_selected) > trailing_block_length:
+                block_start_idx = all_selected[-trailing_block_length]
+                can_extend = True
+                extension_indices = []
+                for j in range(min_consecutive_periods - trailing_block_length):
+                    extend_idx = block_start_idx - 1 - j
+                    if extend_idx < 0 or extend_idx in set(all_selected):
+                        can_extend = False
+                        break
+                    extension_indices.append(extend_idx)
+                
+                if can_extend:
+                    all_selected.extend(extension_indices)
+                    all_selected = sorted(set(all_selected))
+                else:
+                    # Can't extend - try removing the trailing block
+                    # Only safe if the end gap doesn't exceed max_gap_between_periods
+                    new_last_idx = all_selected[-trailing_block_length - 1]
+                    gap_from_end = n - 1 - new_last_idx
+                    if gap_from_end <= max_gap_between_periods:
+                        all_selected = all_selected[:-trailing_block_length]
+        
+        # Fix leading block
+        if all_selected:
+            leading_block_length = 1
+            for i in range(1, len(all_selected)):
+                if all_selected[i] == all_selected[i - 1] + 1:
+                    leading_block_length += 1
+                else:
+                    break
+            
+            if leading_block_length < min_consecutive_periods:
+                # Try to extend the leading block forward
+                block_end_idx = all_selected[leading_block_length - 1]
+                can_extend = True
+                extension_indices = []
+                for j in range(min_consecutive_periods - leading_block_length):
+                    extend_idx = block_end_idx + 1 + j
+                    if extend_idx >= n or extend_idx in set(all_selected):
+                        can_extend = False
+                        break
+                    extension_indices.append(extend_idx)
+                
+                if can_extend:
+                    all_selected.extend(extension_indices)
+                    all_selected = sorted(set(all_selected))
+
     # Validate the complete selection meets all constraints
-    if not _validate_full_selection(
+    validation_result = _validate_full_selection(
         all_selected,
         n,
         min_consecutive_periods,
         max_gap_between_periods,
         max_gap_from_start,
-    ):
+    )
+    if not validation_result:
         # Fail fast: do not attempt to repair constraint violations
+        # Add detailed diagnostics
+        diagnostics = []
+        if all_selected:
+            indices = sorted(all_selected)
+            if indices[0] > max_gap_from_start:
+                diagnostics.append(f"first_selection={indices[0]} > max_gap_from_start={max_gap_from_start}")
+            if indices[0] > max_gap_between_periods:
+                diagnostics.append(f"start_gap={indices[0]} > max_gap_between_periods={max_gap_between_periods}")
+            end_gap = n - 1 - indices[-1]
+            if end_gap > max_gap_between_periods:
+                diagnostics.append(f"end_gap={end_gap} > max_gap_between_periods={max_gap_between_periods}")
+            
+            # Check gaps and blocks
+            block_length = 1
+            for i in range(1, len(indices)):
+                gap = indices[i] - indices[i - 1] - 1
+                if gap > max_gap_between_periods:
+                    diagnostics.append(f"gap at {indices[i-1]}->{indices[i]} = {gap} > max_gap_between_periods={max_gap_between_periods}")
+                if indices[i] == indices[i - 1] + 1:
+                    block_length += 1
+                else:
+                    if block_length < min_consecutive_periods:
+                        diagnostics.append(f"block ending at {indices[i-1]} has length {block_length} < min_consecutive_periods={min_consecutive_periods}")
+                    block_length = 1
+            if block_length < min_consecutive_periods:
+                diagnostics.append(f"final block has length {block_length} < min_consecutive_periods={min_consecutive_periods}")
+        
+        diag_str = "; ".join(diagnostics) if diagnostics else "unknown"
         raise ValueError(
-            f"Selection does not meet constraints. "
+            f"Selection does not meet constraints ({diag_str}). "
             f"Total periods: {n}, Selections: {len(all_selected)}, "
             f"min_consecutive_periods: {min_consecutive_periods}, "
             f"max_gap_between_periods: {max_gap_between_periods}, "

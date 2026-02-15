@@ -1157,6 +1157,7 @@ def main():
                 "min_consecutive_periods": 4,
                 "max_gap_between_periods": 20,
                 "max_gap_from_start": 10,
+                "aggressive": False,
             },
         },
         {
