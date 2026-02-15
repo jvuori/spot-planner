@@ -1087,6 +1087,31 @@ def get_cheapest_periods_extended(
         if first_rough_start >= max_gap_from_start:
             chunk_selection_targets[0] = min_consecutive_periods
 
+    # CRITICAL: Redistribute targets from chunks that are too small to form a valid consecutive block
+    # This prevents losing targets when a chunk is smaller than min_consecutive_periods
+    for chunk_idx in range(num_chunks):
+        chunk_start = chunk_idx * MAX_CHUNK_SIZE
+        chunk_end = min((chunk_idx + 1) * MAX_CHUNK_SIZE, n)
+        chunk_len = chunk_end - chunk_start
+        
+        if chunk_len < min_consecutive_periods and chunk_selection_targets[chunk_idx] > 0:
+            # This chunk is too small to form a valid block, redistribute its targets
+            target = chunk_selection_targets[chunk_idx]
+            chunk_selection_targets[chunk_idx] = 0
+            
+            # Add to the previous chunk (which should be large enough)
+            if chunk_idx > 0:
+                chunk_selection_targets[chunk_idx - 1] += target
+            else:
+                # No previous chunk, add to next valid chunk
+                for next_idx in range(chunk_idx + 1, num_chunks):
+                    next_chunk_start = next_idx * MAX_CHUNK_SIZE
+                    next_chunk_end = min((next_idx + 1) * MAX_CHUNK_SIZE, n)
+                    next_chunk_len = next_chunk_end - next_chunk_start
+                    if next_chunk_len >= min_consecutive_periods:
+                        chunk_selection_targets[next_idx] += target
+                        break
+
     # Process each chunk with boundary-aware constraints and look-ahead optimization
     all_selected: list[int] = []
     prev_state: ChunkBoundaryState | None = None
@@ -1309,6 +1334,34 @@ def get_cheapest_periods_extended(
                     all_selected.extend(extension_indices)
                     all_selected = sorted(set(all_selected))
 
+    # CRITICAL: Check if minimum selections requirement is met
+    # If the final selection falls short of min_selections, and we actually need more,
+    # try to add more items by selecting from chunks where we can properly form valid blocks
+    if len(all_selected) < min_selections and min_selections > 0:
+        # Try to find and select additional periods that could extend existing blocks
+        selected_set = set(all_selected)
+        unselected = [i for i in range(n) if i not in selected_set]
+        unselected_with_prices = [(i, prices[i]) for i in unselected]
+        unselected_with_prices.sort(key=lambda x: x[1])  # Sort by price, cheapest first
+        
+        # Only try to add items if it makes sense and doesn't create constraint violations
+        for idx, price in unselected_with_prices:
+            if len(all_selected) >= min_selections:
+                break
+            
+            # Skip indices that would create isolated single items or violate final gap constraints
+            test_selection = sorted(all_selected + [idx])
+            
+            # Only add if it doesn't violate any constraints
+            if _validate_full_selection(
+                test_selection,
+                n,
+                min_consecutive_periods,
+                max_gap_between_periods,
+                max_gap_from_start,
+            ):
+                all_selected = test_selection
+
     # Validate the complete selection meets all constraints
     validation_result = _validate_full_selection(
         all_selected,
@@ -1345,6 +1398,10 @@ def get_cheapest_periods_extended(
                     block_length = 1
             if block_length < min_consecutive_periods:
                 diagnostics.append(f"final block has length {block_length} < min_consecutive_periods={min_consecutive_periods}")
+        
+        # Also check if we fell short on min_selections
+        if len(all_selected) < min_selections:
+            diagnostics.append(f"under-selected: {len(all_selected)} < min_selections={min_selections}")
         
         diag_str = "; ".join(diagnostics) if diagnostics else "unknown"
         raise ValueError(
