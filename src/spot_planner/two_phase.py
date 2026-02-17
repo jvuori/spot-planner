@@ -920,8 +920,11 @@ def get_cheapest_periods_extended(
                         if gap > rough_max_gap:
                             # Add cheapest group in the gap
                             candidates = [
-                                (g, p) for g, p in indexed_avgs_by_price
-                                if prev < g < idx and g not in rough_selected and g not in bridged
+                                (g, p)
+                                for g, p in indexed_avgs_by_price
+                                if prev < g < idx
+                                and g not in rough_selected
+                                and g not in bridged
                             ]
                             if candidates:
                                 best = min(candidates, key=lambda x: x[1])
@@ -1359,9 +1362,7 @@ def get_cheapest_periods_extended(
                 min_cost = float("inf")
                 best_start = None
                 for start in range(len(gap_prices) - min_consecutive_periods + 1):
-                    cost = sum(
-                        gap_prices[start : start + min_consecutive_periods]
-                    )
+                    cost = sum(gap_prices[start : start + min_consecutive_periods])
                     if cost < min_cost:
                         min_cost = cost
                         best_start = start

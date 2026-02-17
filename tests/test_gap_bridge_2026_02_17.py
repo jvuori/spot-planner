@@ -17,9 +17,8 @@ Fix:
 2. Changed single-pass bridge to inner while-loop that keeps adding blocks
    until the gap is within constraints.
 """
-from decimal import Decimal
 
-import pytest
+from decimal import Decimal
 
 from spot_planner import two_phase
 
@@ -45,13 +44,13 @@ def _validate_selection(
     for i in range(1, len(indices)):
         gap = indices[i] - indices[i - 1] - 1
         assert gap <= max_gap, (
-            f"Gap {gap} at {indices[i-1]}->{indices[i]} > max_gap={max_gap}"
+            f"Gap {gap} at {indices[i - 1]}->{indices[i]} > max_gap={max_gap}"
         )
         if indices[i] == indices[i - 1] + 1:
             block_len += 1
         else:
             assert block_len >= min_consecutive, (
-                f"Block ending at {indices[i-1]} has length {block_len} < {min_consecutive}"
+                f"Block ending at {indices[i - 1]} has length {block_len} < {min_consecutive}"
             )
             block_len = 1
     # Last block
@@ -64,18 +63,126 @@ def _validate_selection(
 # Prices c/kWh per 15-minute slot. Cheap region [0-49], expensive [40-116],
 # then cheaper again at end [110-119].
 PRICES_2026_02_17 = [
-    12.842, 12.497, 11.312, 10.21, 11.292, 10.195, 8.721, 7.324, 6.66, 6.829,
-    7.245, 7.569, 6.765, 7.776, 8.739, 8.534, 8.678, 8.178, 7.686, 7.549, 7.927,
-    8.172, 8.045, 7.91, 4.846, 5.312, 5.734, 6.248, 5.41, 6.149, 6.809, 7.335,
-    6.467, 7.28, 7.477, 8.4, 6.972, 7.452, 8.265, 9.046, 8.198, 9.148, 9.437,
-    9.582, 9.672, 9.692, 10.098, 10.762, 10.065, 11.146, 12.931, 15.058, 14.831,
-    17.306, 19.214, 20.599, 20.638, 20.963, 19.368, 18.039, 16.009, 16.307, 16.941,
-    18.975, 18.479, 17.971, 18.797, 18.032, 15.009, 14.269, 13.534, 13.245, 15.21,
-    15.0, 14.281, 13.508, 13.792, 13.611, 13.582, 13.615, 13.605, 13.612, 13.526,
-    13.88, 13.025, 13.49, 14.301, 15.0, 13.492, 14.327, 15.0, 16.423, 16.804,
-    18.384, 18.913, 18.944, 18.563, 18.201, 16.424, 13.907, 16.382, 14.281, 12.795,
-    12.392, 13.494, 12.603, 12.097, 11.557, 12.605, 12.0, 11.975, 11.148, 11.47,
-    10.893, 10.621, 10.503, 10.43, 10.353, 10.263, 10.101,
+    12.842,
+    12.497,
+    11.312,
+    10.21,
+    11.292,
+    10.195,
+    8.721,
+    7.324,
+    6.66,
+    6.829,
+    7.245,
+    7.569,
+    6.765,
+    7.776,
+    8.739,
+    8.534,
+    8.678,
+    8.178,
+    7.686,
+    7.549,
+    7.927,
+    8.172,
+    8.045,
+    7.91,
+    4.846,
+    5.312,
+    5.734,
+    6.248,
+    5.41,
+    6.149,
+    6.809,
+    7.335,
+    6.467,
+    7.28,
+    7.477,
+    8.4,
+    6.972,
+    7.452,
+    8.265,
+    9.046,
+    8.198,
+    9.148,
+    9.437,
+    9.582,
+    9.672,
+    9.692,
+    10.098,
+    10.762,
+    10.065,
+    11.146,
+    12.931,
+    15.058,
+    14.831,
+    17.306,
+    19.214,
+    20.599,
+    20.638,
+    20.963,
+    19.368,
+    18.039,
+    16.009,
+    16.307,
+    16.941,
+    18.975,
+    18.479,
+    17.971,
+    18.797,
+    18.032,
+    15.009,
+    14.269,
+    13.534,
+    13.245,
+    15.21,
+    15.0,
+    14.281,
+    13.508,
+    13.792,
+    13.611,
+    13.582,
+    13.615,
+    13.605,
+    13.612,
+    13.526,
+    13.88,
+    13.025,
+    13.49,
+    14.301,
+    15.0,
+    13.492,
+    14.327,
+    15.0,
+    16.423,
+    16.804,
+    18.384,
+    18.913,
+    18.944,
+    18.563,
+    18.201,
+    16.424,
+    13.907,
+    16.382,
+    14.281,
+    12.795,
+    12.392,
+    13.494,
+    12.603,
+    12.097,
+    11.557,
+    12.605,
+    12.0,
+    11.975,
+    11.148,
+    11.47,
+    10.893,
+    10.621,
+    10.503,
+    10.43,
+    10.353,
+    10.263,
+    10.101,
 ]
 
 
@@ -157,7 +264,7 @@ class TestGapBridge20260217:
             gap = indices[i] - indices[i - 1] - 1
             assert gap <= max_gap, (
                 f"Selection violates max_gap: gap={gap} at "
-                f"{indices[i-1]}->{indices[i]} > max_gap={max_gap}"
+                f"{indices[i - 1]}->{indices[i]} > max_gap={max_gap}"
             )
 
     def test_all_blocks_meet_min_consecutive(self) -> None:
@@ -182,7 +289,7 @@ class TestGapBridge20260217:
                 block_len += 1
             else:
                 assert block_len >= min_consecutive, (
-                    f"Block ending at {indices[i-1]} has length {block_len} < {min_consecutive}"
+                    f"Block ending at {indices[i - 1]} has length {block_len} < {min_consecutive}"
                 )
                 block_len = 1
         assert block_len >= min_consecutive, (
