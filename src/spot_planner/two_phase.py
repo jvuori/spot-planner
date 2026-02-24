@@ -1394,6 +1394,19 @@ def get_cheapest_periods_extended(
             bridged_selected.append(idx)
         all_selected = sorted(bridged_selected)
 
+    # Extend the trailing selection with any immediately adjacent below-threshold slots.
+    # This handles the case where the last chunk was too small to form a standalone
+    # valid consecutive block (chunk_len < min_consecutive_periods), so its target was
+    # set to 0 and those slots were skipped — even though they are at or below the
+    # threshold and are contiguous with the already-selected run.  Adding them just
+    # extends an existing valid run, so no constraint can be violated.
+    if all_selected:
+        last = all_selected[-1]
+        while last + 1 < n and prices[last + 1] <= low_price_threshold:
+            last += 1
+            all_selected.append(last)
+        all_selected = sorted(all_selected)
+
     # Fix incomplete trailing and leading blocks
     if all_selected:
         # Fix trailing block
