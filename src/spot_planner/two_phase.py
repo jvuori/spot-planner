@@ -710,10 +710,14 @@ def _repair_selection(
                     next_cheap_idx = idx
                     break
 
-            # If we found a cheap item within max_gap, check if we can skip expensive items
+            # If we found a cheap item within max_gap, check if we can skip expensive items.
+            # Only skip if there is an actual gap (gap_to_cheap > 0) of all-expensive items
+            # between the block end and the next cheap item.  When next_cheap_idx is directly
+            # adjacent (gap_to_cheap == 0), the range is empty and all() is vacuously True,
+            # which would incorrectly prevent extending a short cheap block.
             if next_cheap_idx is not None:
                 gap_to_cheap = next_cheap_idx - block_end_idx - 1
-                if gap_to_cheap <= max_gap_between_periods:
+                if gap_to_cheap > 0 and gap_to_cheap <= max_gap_between_periods:
                     # Check if items between block_end and next_cheap are all expensive
                     expensive_between = all(
                         prices[idx] > low_price_threshold
@@ -1448,6 +1452,27 @@ def get_cheapest_periods_extended(
                 if can_extend:
                     all_selected.extend(extension_indices)
                     all_selected = sorted(set(all_selected))
+
+        # Fix end gap: if the gap from the last selection to the sequence end exceeds
+        # max_gap_between_periods, add the cheapest reachable consecutive block near the end.
+        if all_selected and n - 1 - all_selected[-1] > max_gap_between_periods:
+            last = all_selected[-1]
+            best_end_start: int | None = None
+            best_end_cost: Decimal | None = None
+            for start in range(
+                last + 1,
+                min(last + max_gap_between_periods + 1, n - min_consecutive_periods + 1),
+            ):
+                end = start + min_consecutive_periods - 1
+                if end < n and n - 1 - end <= max_gap_between_periods:
+                    cost = sum(prices[start : end + 1], Decimal(0))
+                    if best_end_cost is None or cost < best_end_cost:
+                        best_end_cost = cost
+                        best_end_start = start
+            if best_end_start is not None:
+                for j in range(min_consecutive_periods):
+                    all_selected.append(best_end_start + j)
+                all_selected = sorted(set(all_selected))
 
     # CRITICAL: Check if minimum selections requirement is met
     # If the final selection falls short of min_selections, and we actually need more,
