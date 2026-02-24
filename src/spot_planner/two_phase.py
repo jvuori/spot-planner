@@ -1341,6 +1341,23 @@ def get_cheapest_periods_extended(
     # Sort and validate the final result
     all_selected = sorted(set(all_selected))
 
+    # Bridge gaps where every item in the gap is at or below the threshold.
+    # This eliminates brief idle pauses between two selected cheap runs — a
+    # chunk-boundary artifact where each chunk optimises independently and the
+    # last/first boundary items fall below the global threshold but still raise
+    # the local chunk's average cost enough to be excluded.
+    # Applies regardless of aggressive mode; safe because adding cheap items
+    # between existing selected runs can only reduce or keep gaps the same.
+    selected_set_for_bridge = set(all_selected)
+    for i in range(len(all_selected) - 1):
+        gap_start = all_selected[i] + 1
+        gap_end = all_selected[i + 1]  # exclusive
+        gap_indices = list(range(gap_start, gap_end))
+        if gap_indices and all(prices[j] <= low_price_threshold for j in gap_indices):
+            for j in gap_indices:
+                selected_set_for_bridge.add(j)
+    all_selected = sorted(selected_set_for_bridge)
+
     # CRITICAL: Bridge any remaining large gaps between chunks
     # This ensures gaps between different chunks don't exceed constraints.
     # Uses a while-loop per gap to add multiple bridge blocks if needed.
