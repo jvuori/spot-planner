@@ -1407,6 +1407,103 @@ def get_cheapest_periods_extended(
             all_selected.append(last)
         all_selected = sorted(all_selected)
 
+    # Run consolidation: for each above-threshold-only inner run R, try to eliminate it.
+    #
+    # Strategy (in priority order):
+    #   1. DROP: simply remove R if the direct gap from prev_run.end to next_run.start
+    #      is already within max_gap_between_periods and total - len(R) >= min_selections.
+    #      This is the best outcome — no above-threshold items added at all.
+    #
+    #   2. EXTEND BACKWARD: if dropping R leaves too large a gap, walk backward from
+    #      next_run.start collecting items whose price <= avg(R) until the new gap is
+    #      within max_gap_between_periods, then replace R with those cheaper items.
+    #
+    # Example DROP: [13-16], [19-22 above threshold], [36-70 cheap]
+    #   → direct gap 16→36 = 19 ≤ max_gap=20, total-4=39 ≥ 35 → drop [19-22]
+    #   → result [13-16] + [36-70]: all second-run items at/below threshold, cheaper
+    #
+    # Conditions:
+    #   1. Run is not the first (first run anchored by max_gap_from_start).
+    #   2. There is a next run.
+    #   3. The next run is ≥ min_consecutive_periods (always true, but recheck after extend).
+    if all_selected:
+        changed = True
+        while changed:
+            changed = False
+            # Recompute runs from scratch each iteration
+            runs: list[tuple[int, int]] = []  # (start_idx, end_idx) inclusive
+            cur_sel = sorted(all_selected)
+            if cur_sel:
+                rs = cur_sel[0]
+                re = cur_sel[0]
+                for si in cur_sel[1:]:
+                    if si == re + 1:
+                        re = si
+                    else:
+                        runs.append((rs, re))
+                        rs = re = si
+                runs.append((rs, re))
+
+            for run_i in range(1, len(runs) - 1):  # skip first and last run
+                r_start, r_end = runs[run_i]
+                r_prev_end = runs[run_i - 1][1]
+                r_next_start, r_next_end = runs[run_i + 1]
+
+                # Only consider runs that are entirely above the threshold
+                if any(prices[j] <= low_price_threshold for j in range(r_start, r_end + 1)):
+                    continue
+
+                r_len = r_end - r_start + 1
+                remove_set = set(range(r_start, r_end + 1))
+
+                # --- Strategy 1: DROP R entirely ---
+                direct_gap = r_next_start - r_prev_end - 1
+                new_total_drop = len(cur_sel) - r_len
+                if (
+                    direct_gap <= max_gap_between_periods
+                    and new_total_drop >= min_selections
+                ):
+                    all_selected = sorted(set(cur_sel) - remove_set)
+                    changed = True
+                    break
+
+                # --- Strategy 2: EXTEND BACKWARD (bridge the gap with cheaper items) ---
+                r_avg = sum(prices[j] for j in range(r_start, r_end + 1)) / r_len
+
+                extension: list[int] = []
+                j = r_next_start - 1
+                while j >= 0 and j not in set(cur_sel):
+                    if prices[j] <= r_avg:
+                        extension.append(j)
+                        j -= 1
+                    else:
+                        break
+
+                if not extension:
+                    continue
+
+                new_next_start = min(extension)
+                new_gap = new_next_start - r_prev_end - 1
+
+                if new_gap > max_gap_between_periods:
+                    continue
+
+                # Ensure the combined next run is still ≥ min_consecutive_periods
+                new_run_len = r_next_end - new_next_start + 1
+                if new_run_len < min_consecutive_periods:
+                    continue
+
+                # Ensure replacing R with extension doesn't go below min_selections
+                new_total = len(cur_sel) - r_len + len(extension)
+                if new_total < min_selections:
+                    continue
+
+                # Apply: remove R, add extension items
+                add_set = set(extension)
+                all_selected = sorted((set(cur_sel) - remove_set) | add_set)
+                changed = True
+                break  # restart loop with updated runs
+
     # Fix incomplete trailing and leading blocks
     if all_selected:
         # Fix trailing block
