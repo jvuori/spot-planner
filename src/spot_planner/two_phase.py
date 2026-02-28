@@ -1234,9 +1234,14 @@ def get_cheapest_periods_extended(
 
         # Determine forced prefix selections and adjusted constraints
         forced_prefix_length = 0
-        adjusted_max_gap_start = (
-            max_gap_from_start if chunk_idx == 0 else max_gap_between_periods
-        )
+        # If no selections have been made yet, we're still constrained by
+        # max_gap_from_start (distance from sequence start to first selection).
+        # Once at least one selection exists, subsequent gaps use
+        # max_gap_between_periods.
+        if not all_selected:
+            adjusted_max_gap_start = max_gap_from_start
+        else:
+            adjusted_max_gap_start = max_gap_between_periods
 
         if prev_state is not None:
             # Handle incomplete consecutive block from previous chunk
@@ -1252,8 +1257,11 @@ def get_cheapest_periods_extended(
 
             # Adjust max_gap_from_start based on trailing unselected
             if prev_state.trailing_unselected_count > 0:
+                gap_base = (
+                    max_gap_from_start if not all_selected else max_gap_between_periods
+                )
                 adjusted_max_gap_start = max(
-                    0, max_gap_between_periods - prev_state.trailing_unselected_count
+                    0, gap_base - prev_state.trailing_unselected_count
                 )
 
         # Calculate target selections for this chunk based on rough planning
