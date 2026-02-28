@@ -1374,7 +1374,10 @@ def get_cheapest_periods_extended(
                 gap = idx - prev_idx - 1
                 if gap <= max_gap_between_periods:
                     break
-                # Gap too large - add cheapest consecutive block in the gap
+                # Gap too large - add cheapest consecutive block in the gap.
+                # CRITICAL: The block's start must be within max_gap of prev_idx,
+                # otherwise adding it creates a new gap violation before the block.
+                # Since gap_start = prev_idx + 1, this means: start ≤ max_gap_between_periods.
                 gap_start = prev_idx + 1
                 gap_end = idx - 1
                 gap_prices = prices[gap_start : gap_end + 1]
@@ -1382,7 +1385,11 @@ def get_cheapest_periods_extended(
                     break  # Gap too small to place a valid block; give up
                 min_cost = float("inf")
                 best_start = None
-                for start in range(len(gap_prices) - min_consecutive_periods + 1):
+                max_start = min(
+                    max_gap_between_periods,
+                    len(gap_prices) - min_consecutive_periods,
+                )
+                for start in range(max_start + 1):
                     cost = sum(gap_prices[start : start + min_consecutive_periods])
                     if cost < min_cost:
                         min_cost = cost
