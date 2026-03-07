@@ -138,16 +138,25 @@ PRICES_2025_10_02 = [
 
 
 def test_2025_10_02():
+    prices = [Decimal(price) for price in PRICES_2025_10_02]
+    threshold = Decimal("8.761")
     periods = get_cheapest_periods(
-        prices=[Decimal(price) for price in PRICES_2025_10_02],
-        low_price_threshold=Decimal("8.761"),
+        prices=prices,
+        low_price_threshold=threshold,
         min_selections=5,
         min_consecutive_periods=1,
         max_gap_between_periods=5,
         max_gap_from_start=5,
     )
-    # Algorithm selects cheapest items that meet constraints
-    assert periods == [4, 10, 15, 21, 22, 23]  # Cheapest 6 items below threshold
+    # All cheap items (indices 0, 3, 4, 5, 20, 21, 22, 23) should be selected.
+    # Bridges are needed to keep the gap ≤ 5 between the first cheap cluster (0, 3-5)
+    # and the second cheap cluster (20-23); the exact bridge indices may vary.
+    cheap_in_data = {i for i, p in enumerate(prices) if p <= threshold}
+    assert cheap_in_data.issubset(set(periods)), (
+        f"Not all cheap items selected. Missing: {cheap_in_data - set(periods)}, "
+        f"Result: {periods}"
+    )
+    assert len(periods) >= 5
 
 
 PRICES_2026_02_15_HANG_TEST = [

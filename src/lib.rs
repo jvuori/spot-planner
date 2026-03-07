@@ -251,7 +251,8 @@ fn get_cheapest_periods(
 
     // Choose algorithm based on aggressive parameter
     if aggressive {
-        // Aggressive mode: minimize average cost (current behavior)
+        // Aggressive mode: include cheap items when avg stays at/below threshold;
+        // fall back to minimising average cost if no such selection exists.
         get_cheapest_periods_aggressive(
             &price_items,
             &cheap_items,
@@ -346,7 +347,6 @@ fn get_cheapest_periods_aggressive(
                     min_consecutive_periods,
                     price_items.len(),
                 ) {
-                    // Calculate average cost of this merged result
                     let merged_cost: Decimal =
                         merged_indices.iter().map(|&i| price_items[i].1).sum();
                     let merged_avg_cost = merged_cost / Decimal::from(merged_indices.len());

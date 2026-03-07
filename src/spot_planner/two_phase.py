@@ -457,7 +457,7 @@ def _find_best_chunk_selection_with_lookahead(
 
     # Pick the best candidate based on mode
     if aggressive:
-        # Aggressive mode: lowest average cost
+        # Aggressive mode: use average cost
         best_selection, _ = min(candidates, key=lambda x: x[1])
     else:
         # Conservative mode: most cheap items, then lowest total cost
@@ -1310,7 +1310,15 @@ def get_cheapest_periods_extended(
             # Can't select more than what's available
             remaining_target = min(remaining_target, len(remaining_prices))
 
-            if len(remaining_prices) > 0 and remaining_target > 0:
+            if remaining_target > 0 and remaining_target < min_consecutive_periods:
+                # The remaining portion is too small to start a new consecutive block.
+                # Select all remaining items to extend the forced block from the
+                # previous chunk into a single valid run.
+                remaining_selected = list(range(len(remaining_prices)))
+                chunk_selected = forced_selections + [
+                    i + remaining_start for i in remaining_selected
+                ]
+            elif len(remaining_prices) > 0 and remaining_target > 0:
                 # Use look-ahead for the remaining portion
                 remaining_selected = _find_best_chunk_selection_with_lookahead(
                     remaining_prices,

@@ -1,4 +1,5 @@
 from decimal import Decimal
+from itertools import combinations as _combinations
 from typing import Sequence
 
 # Import two-phase algorithm which handles both short and long sequences
@@ -104,7 +105,7 @@ def get_cheapest_periods(
 
     # Use extended algorithm for longer sequences
     if len(prices) > 28:
-        return two_phase.get_cheapest_periods_extended(
+        result = two_phase.get_cheapest_periods_extended(
             prices,
             low_price_threshold,
             min_selections,
@@ -113,9 +114,13 @@ def get_cheapest_periods(
             max_gap_from_start,
             aggressive,
         )
+        return _try_add_cheap_items(
+            result, prices, low_price_threshold,
+            min_consecutive_periods, max_gap_between_periods, max_gap_from_start,
+        )
 
     # Use direct brute-force for shorter sequences (dispatched by two_phase module)
-    return two_phase._get_cheapest_periods(
+    result = two_phase._get_cheapest_periods(
         prices,
         low_price_threshold,
         min_selections,
@@ -124,3 +129,58 @@ def get_cheapest_periods(
         max_gap_from_start,
         aggressive,
     )
+    return _try_add_cheap_items(
+        result, prices, low_price_threshold,
+        min_consecutive_periods, max_gap_between_periods, max_gap_from_start,
+    )
+
+
+def _try_add_cheap_items(
+    result: list[int],
+    prices: Sequence[Decimal],
+    low_price_threshold: Decimal,
+    min_consecutive_periods: int,
+    max_gap_between_periods: int,
+    max_gap_from_start: int,
+) -> list[int]:
+    """Augment result by adding remaining below-threshold items without any bridge items.
+
+    After the base algorithm produces a valid selection, tries all combinations of the
+    remaining below-threshold items (those not in result with price <= threshold).
+    For each combination the full merged set is validated against all constraints —
+    no items above the threshold are added as bridges.
+
+    Returns the selection with the most items added; ties broken by lowest average cost.
+    """
+    n = len(prices)
+    result_set = set(result)
+    remaining_cheap = sorted(
+        i for i in range(n)
+        if i not in result_set and prices[i] <= low_price_threshold
+    )
+
+    if not remaining_cheap:
+        return result
+
+    # Try subsets from largest to smallest. Return as soon as the maximum valid
+    # size is found. Among same-size valid combos, prefer lowest average cost.
+    for size in range(len(remaining_cheap), 0, -1):
+        best_candidate: list[int] | None = None
+        best_avg = Decimal("inf")
+        for combo in _combinations(remaining_cheap, size):
+            candidate = sorted(result + list(combo))
+            if two_phase._validate_full_selection(
+                candidate,
+                n,
+                min_consecutive_periods,
+                max_gap_between_periods,
+                max_gap_from_start,
+            ):
+                avg = sum(prices[i] for i in candidate) / len(candidate)
+                if avg < best_avg:
+                    best_avg = avg
+                    best_candidate = candidate
+        if best_candidate is not None:
+            return best_candidate
+
+    return result

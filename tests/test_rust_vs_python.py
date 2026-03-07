@@ -9,6 +9,7 @@ from decimal import Decimal
 
 import pytest
 
+from spot_planner import main as _main
 from spot_planner.brute_force import _is_valid_combination, get_cheapest_periods_python
 from spot_planner.main import get_cheapest_periods
 
@@ -543,6 +544,16 @@ class TestRustVsPython:
                 max_gap_between_periods,
                 max_gap_from_start,
             )
+            # Apply post-processing to python_result so it goes through the same
+            # full pipeline as rust_result (base algorithm + cheap-item augmentation).
+            python_result = _main._try_add_cheap_items(
+                python_result,
+                prices,
+                low_price_threshold,
+                min_consecutive_periods,
+                max_gap_between_periods,
+                max_gap_from_start,
+            )
 
             # Results should be identical
             assert rust_result == python_result, (
@@ -615,6 +626,15 @@ class TestRustVsPython:
                 prices,
                 low_price_threshold,
                 min_selections,
+                min_consecutive_periods,
+                max_gap_between_periods,
+                max_gap_from_start,
+            )
+            # Apply post-processing so python_result matches the full pipeline used by rust_result.
+            python_result = _main._try_add_cheap_items(
+                python_result,
+                prices,
+                low_price_threshold,
                 min_consecutive_periods,
                 max_gap_between_periods,
                 max_gap_from_start,
@@ -753,6 +773,15 @@ class TestRustVsPython:
             max_gap_between_periods,
             max_gap_from_start,
         )
+        # Apply post-processing so python_result matches the full pipeline used by rust_result.
+        python_result = _main._try_add_cheap_items(
+            python_result,
+            base_prices,
+            low_price_threshold,
+            min_consecutive_periods,
+            max_gap_between_periods,
+            max_gap_from_start,
+        )
 
         assert rust_result == python_result, (
             f"Performance test failed:\n"
@@ -780,6 +809,10 @@ class TestRustVsPython:
         )
         python_result = get_cheapest_periods_python(
             high_precision_prices, low_price_threshold, 2, 1, 1, 1
+        )
+        # Apply post-processing so python_result matches the full pipeline used by rust_result.
+        python_result = _main._try_add_cheap_items(
+            python_result, high_precision_prices, low_price_threshold, 1, 1, 1
         )
 
         assert rust_result == python_result, (
@@ -863,9 +896,10 @@ class TestRustVsPython:
             f"All below threshold: {all(prices[i] <= low_price_threshold for i in [0, 1, 2])}"
         )
 
-        # Verify the result has the correct length
-        assert len(rust_result) == min_selections, (
-            f"Result length {len(rust_result)} != expected {min_selections}"
+        # Verify the result has at least min_selections items
+        # (may be more since all valid cheap items are now included)
+        assert len(rust_result) >= min_selections, (
+            f"Result length {len(rust_result)} < expected minimum {min_selections}"
         )
 
         # Verify all selected items are valid indices

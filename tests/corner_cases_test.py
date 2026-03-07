@@ -268,9 +268,9 @@ class TestRealWorldCornerCases:
             max_gap_between_periods=1,
             max_gap_from_start=1,
         )
-        # Algorithm selects minimum number of cheapest items that meet constraints
-        assert len(result) == 3
-        assert result == [0, 1, 3]  # Cheapest 3 items: indices 0, 1, 3
+        # All 3 cheap items (indices 0, 1, 2; prices ≤ 10.0003) should be selected.
+        # Index 3 is also required to satisfy the end-gap constraint (max_gap=1).
+        assert result == [0, 1, 2, 3]
 
     def test_negative_prices(self):
         """Test with negative prices (realistic for electricity spot prices)."""
@@ -290,9 +290,9 @@ class TestRealWorldCornerCases:
             max_gap_between_periods=1,
             max_gap_from_start=1,
         )
-        # Algorithm selects minimum number of cheapest items that meet constraints
-        assert len(result) == 3
-        assert result == [0, 1, 3]  # Cheapest 3 items: indices 0, 1, 3
+        # All 3 cheap items (indices 0, 1, 2; prices ≤ 0.0) should be selected.
+        # Index 3 is also required to satisfy the end-gap constraint (max_gap=1).
+        assert result == [0, 1, 2, 3]
 
     def test_zero_prices(self):
         """Test with zero prices."""
@@ -402,9 +402,10 @@ class TestRealWorldCornerCases:
             max_gap_between_periods=1,
             max_gap_from_start=0,  # Must start from index 0
         )
-        # Algorithm selects minimum number of cheapest items that meet constraints
-        assert len(result) == 2
-        assert result == [0, 2]  # Cheapest 2 items starting from index 0
+        # Cheap items (≤25): indices 0 (10) and 1 (20). Both should be selected.
+        # Index 2 is also required to satisfy end-gap (max_gap=1, last cheap at 1,
+        # end gap would be 4-1-1=2 > 1 without it).
+        assert result == [0, 1, 2]
 
     def test_impossible_constraints(self):
         """Test with impossible constraints that should fail gracefully."""
@@ -451,9 +452,10 @@ class TestBoundaryConditions:
             max_gap_between_periods=1,
             max_gap_from_start=1,
         )
-        # Algorithm selects minimum number of cheapest items that meet constraints
-        assert len(result) == 2
-        assert result == [0, 2]  # Cheapest 2 items: indices 0 (10) and 2 (30)
+        # Cheap items (≤25): indices 0 (10) and 1 (20). Both should be selected.
+        # Index 2 is also required to satisfy end-gap (max_gap=1, without it
+        # end gap = 4-1-1 = 2 > 1).
+        assert result == [0, 1, 2]
 
     def test_min_consecutive_periods_equals_one(self):
         """Test with min_consecutive_periods = 1 (minimum valid value)."""
