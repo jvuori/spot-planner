@@ -21,7 +21,6 @@ def get_cheapest_periods(
     min_consecutive_periods: int,
     max_gap_between_periods: int = 0,
     max_gap_from_start: int = 0,
-    aggressive: bool = True,
 ) -> list[int]:
     """
     Find optimal periods in a price sequence based on cost and timing constraints.
@@ -56,8 +55,6 @@ def get_cheapest_periods(
         max_gap_from_start: Maximum number of periods from the beginning before the
                           first selection must occur. Controls how long we can wait
                           before starting operations.
-        aggressive: If True (default), minimizes average cost per selected period.
-                   If False, maximizes number of cheap items while respecting constraints.
 
     Returns:
         List of indices representing the selected periods, sorted by index.
@@ -120,7 +117,6 @@ def get_cheapest_periods(
             min_consecutive_periods,
             max_gap_between_periods,
             max_gap_from_start,
-            aggressive,
         )
         return _try_add_cheap_items(
             result, prices, low_price_threshold,
@@ -135,7 +131,6 @@ def get_cheapest_periods(
         min_consecutive_periods,
         max_gap_between_periods,
         max_gap_from_start,
-        aggressive,
     )
     return _try_add_cheap_items(
         result, prices, low_price_threshold,

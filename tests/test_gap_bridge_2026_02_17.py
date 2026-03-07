@@ -213,7 +213,6 @@ class TestGapBridge20260217:
             min_consecutive_periods=min_consecutive,
             max_gap_between_periods=max_gap,
             max_gap_from_start=max_gap,
-            aggressive=False,
         )
 
         assert len(result) >= min_selections
@@ -236,7 +235,6 @@ class TestGapBridge20260217:
             min_consecutive_periods=min_consecutive,
             max_gap_between_periods=max_gap,
             max_gap_from_start=max_gap,
-            aggressive=False,
         )
 
         assert len(result) >= min_selections
@@ -256,7 +254,6 @@ class TestGapBridge20260217:
             min_consecutive_periods=min_consecutive,
             max_gap_between_periods=max_gap,
             max_gap_from_start=max_gap,
-            aggressive=False,
         )
 
         indices = sorted(result)
@@ -279,7 +276,6 @@ class TestGapBridge20260217:
             min_consecutive_periods=min_consecutive,
             max_gap_between_periods=44,
             max_gap_from_start=44,
-            aggressive=False,
         )
 
         indices = sorted(result)

@@ -65,7 +65,6 @@ def test_bridge_does_not_create_new_gap_violation():
         min_consecutive_periods=4,
         max_gap_between_periods=20,
         max_gap_from_start=20,
-        aggressive=False,
     )
 
     assert len(result) >= 40, f"Expected >=40 selections, got {len(result)}"

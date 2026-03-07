@@ -510,44 +510,6 @@ class TestEdgeCases:
         assert _validate_full_selection(result, 80, 3, 4, 2)
 
 
-class TestAggressiveVsConservative:
-    """Test aggressive vs conservative mode for extended algorithm."""
-
-    def test_aggressive_mode_minimizes_average_cost(self):
-        """Test that aggressive mode tends to minimize average cost."""
-        prices = [Decimal(str(i % 10 + 1)) for i in range(50)]
-
-        result_aggressive = get_cheapest_periods(
-            prices=prices,
-            low_price_threshold=Decimal("5"),
-            min_selections=15,
-            min_consecutive_periods=2,
-            max_gap_between_periods=5,
-            max_gap_from_start=3,
-            aggressive=True,
-        )
-
-        assert len(result_aggressive) >= 15
-        assert _validate_full_selection(result_aggressive, 50, 2, 5, 3)
-
-    def test_conservative_mode_prefers_cheap_items(self):
-        """Test that conservative mode prefers more cheap items."""
-        prices = [Decimal(str(i % 10 + 1)) for i in range(50)]
-
-        result_conservative = get_cheapest_periods(
-            prices=prices,
-            low_price_threshold=Decimal("5"),
-            min_selections=15,
-            min_consecutive_periods=2,
-            max_gap_between_periods=5,
-            max_gap_from_start=3,
-            aggressive=False,
-        )
-
-        assert len(result_conservative) >= 15
-        assert _validate_full_selection(result_conservative, 50, 2, 5, 3)
-
-
 class TestLookaheadOptimization:
     """Test that look-ahead optimization considers next chunk costs."""
 

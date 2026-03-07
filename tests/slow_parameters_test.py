@@ -40,7 +40,6 @@ def test_slow_parameters():
     min_consecutive_periods = 1
     max_gap_between_periods = 4
     max_gap_from_start = 4
-    aggressive = False
 
     print(f"Testing with {len(prices)} prices")
     print(f"Low price threshold: {low_price_threshold}")
@@ -49,7 +48,6 @@ def test_slow_parameters():
     print(
         f"Gap constraints: max_gap_between_periods={max_gap_between_periods}, max_gap_from_start={max_gap_from_start}"
     )
-    print(f"Aggressive mode: {aggressive}")
 
     # Count cheap items
     cheap_items = [p for p in prices if p <= low_price_threshold]
@@ -68,7 +66,6 @@ def test_slow_parameters():
             min_consecutive_periods=min_consecutive_periods,
             max_gap_between_periods=max_gap_between_periods,
             max_gap_from_start=max_gap_from_start,
-            aggressive=aggressive,
         )
 
         end_time = time.time()

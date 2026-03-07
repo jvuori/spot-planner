@@ -176,7 +176,6 @@ def calculate_chunk_targets(
     min_consecutive_periods: int,
     max_gap_between_periods: int,
     max_gap_from_start: int,
-    aggressive: bool,
 ) -> tuple[list[int], int]:
     """
     Calculate chunk selection targets from phase 1 rough planning.
@@ -240,7 +239,6 @@ def calculate_chunk_targets(
                     rough_min_consecutive,
                     rough_max_gap,
                     rough_max_gap_start if chunk_start_idx == 0 else rough_max_gap,
-                    aggressive,
                 )
                 for idx in chunk_selected:
                     rough_selected.append(chunk_start_idx + idx)
@@ -262,7 +260,6 @@ def calculate_chunk_targets(
                 rough_min_consecutive,
                 rough_max_gap,
                 rough_max_gap_start,
-                aggressive,
             )
         except ValueError:
             try:
@@ -273,7 +270,6 @@ def calculate_chunk_targets(
                     1,
                     len(averages),
                     len(averages),
-                    aggressive,
                 )
             except ValueError:
                 rough_selected = [
@@ -373,7 +369,6 @@ def visualize_scenario(
     min_consecutive_periods: int,
     max_gap_between_periods: int,
     max_gap_from_start: int,
-    aggressive: bool = True,
 ):
     """Create a bar chart visualization of selected vs non-selected items."""
     n = len(prices)
@@ -450,7 +445,6 @@ def visualize_scenario(
             min_consecutive_periods,
             max_gap_between_periods,
             max_gap_from_start,
-            aggressive,
         )
         
         # Calculate optimal chunk size using same logic as _calculate_optimal_chunk_size
@@ -832,7 +826,6 @@ def main():
                 "min_consecutive_periods": 4,
                 "max_gap_between_periods": 24,
                 "max_gap_from_start": 22,
-                "aggressive": False,
             },
         },
         {
@@ -1157,7 +1150,6 @@ def main():
                 "min_consecutive_periods": 4,
                 "max_gap_between_periods": 20,
                 "max_gap_from_start": 10,
-                "aggressive": False,
             },
         },
         {
@@ -1482,7 +1474,6 @@ def main():
                 "min_consecutive_periods": 4,
                 "max_gap_between_periods": 20,
                 "max_gap_from_start": 10,
-                "aggressive": False,  # Conservative mode
             },
         },
         {
@@ -1591,7 +1582,6 @@ def main():
                 "min_consecutive_periods": 4,
                 "max_gap_between_periods": 24,
                 "max_gap_from_start": 20,
-                "aggressive": False,
             },
         },
         {
@@ -1700,7 +1690,6 @@ def main():
                 "min_consecutive_periods": 4,
                 "max_gap_between_periods": 16,
                 "max_gap_from_start": 15,
-                "aggressive": False,
             },
         },
         {
@@ -1849,7 +1838,6 @@ def main():
                 "min_consecutive_periods": 4,
                 "max_gap_between_periods": 12,
                 "max_gap_from_start": 8,
-                "aggressive": False,
             },
         },
         {
@@ -1962,7 +1950,6 @@ def main():
                 "min_consecutive_periods": 4,
                 "max_gap_between_periods": 24,
                 "max_gap_from_start": 18,
-                "aggressive": False,
             },
         },
         {
@@ -2079,7 +2066,6 @@ def main():
                 "min_consecutive_periods": 1,
                 "max_gap_between_periods": 24,
                 "max_gap_from_start": 23,
-                "aggressive": False,
             },
         },
         {
@@ -2471,12 +2457,10 @@ def main():
 
         # Get parameters
         params = scenario["params"].copy()
-        aggressive = params.pop("aggressive", True)
 
         # Run algorithm
         selected = get_cheapest_periods(
             prices=prices,
-            aggressive=aggressive,
             **params,
         )
 
@@ -2535,7 +2519,6 @@ def main():
             min_consecutive_periods=params["min_consecutive_periods"],
             max_gap_between_periods=params["max_gap_between_periods"],
             max_gap_from_start=params["max_gap_from_start"],
-            aggressive=aggressive,
         )
 
         # Print summary

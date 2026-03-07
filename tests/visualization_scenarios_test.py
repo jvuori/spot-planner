@@ -190,7 +190,6 @@ class TestVisualizationScenarios:
         
         result = get_cheapest_periods(
             prices=prices,
-            aggressive=False,
             **params
         )
         
@@ -226,7 +225,6 @@ class TestVisualizationScenarios:
         
         result = get_cheapest_periods(
             prices=prices,
-            aggressive=False,
             **params
         )
         
@@ -260,7 +258,6 @@ class TestVisualizationScenarios:
         
         result = get_cheapest_periods(
             prices=prices,
-            aggressive=False,
             **params
         )
         
@@ -294,7 +291,6 @@ class TestVisualizationScenarios:
         
         result = get_cheapest_periods(
             prices=prices,
-            aggressive=False,
             **params
         )
         
@@ -328,7 +324,6 @@ class TestVisualizationScenarios:
         
         result = get_cheapest_periods(
             prices=prices,
-            aggressive=False,
             **params
         )
         
@@ -362,7 +357,6 @@ class TestVisualizationScenarios:
         
         result = get_cheapest_periods(
             prices=prices,
-            aggressive=False,
             **params
         )
         
@@ -472,7 +466,6 @@ class TestVisualizationScenarios:
         
         result = get_cheapest_periods(
             prices=prices,
-            aggressive=False,
             **params
         )
         
@@ -577,7 +570,6 @@ class TestVisualizationScenarios:
         
         result = get_cheapest_periods(
             prices=prices,
-            aggressive=False,
             **params
         )
         
