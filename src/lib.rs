@@ -200,10 +200,15 @@ fn get_cheapest_periods(
         ));
     }
 
+    // Safety guard: the combination search is O(C(n, k)) — exponential for large n.
+    // Anything above this limit must be routed through the two-phase algorithm
+    // instead.  Fail immediately rather than hanging at 100 % CPU.
     if prices.len() > 28 {
-        return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(
-            "prices cannot contain more than 28 items",
-        ));
+        return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(format!(
+            "brute-force received {} items but the combination search is only safe \
+             for ≤28 items. Use the two-phase algorithm for longer sequences.",
+            prices.len()
+        )));
     }
 
     if min_selections == 0 {

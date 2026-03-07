@@ -5,8 +5,15 @@ all combinations to find the optimal selection of periods.
 """
 
 import itertools
+import logging as _logging
 from decimal import Decimal
 from typing import Sequence
+
+_LOG = _logging.getLogger(__name__)
+
+# The combination search is O(C(n, k)) — exponential for large n.  Feeding more
+# than this many items would hang the process.  Matches the Rust-side limit.
+_MAX_BRUTE_FORCE_ITEMS = 28
 
 
 def _is_valid_combination(
@@ -143,6 +150,20 @@ def get_cheapest_periods_python(
     This is the fallback implementation when Rust is not available, or for
     sequences that are small enough to be handled by brute-force.
     """
+    # Defensive guard: the combination search is exponential in len(prices).
+    # Anything above the brute-force limit must be routed through the two-phase
+    # algorithm instead — fail immediately rather than hanging at 100 % CPU.
+    if len(prices) > _MAX_BRUTE_FORCE_ITEMS:
+        msg = (
+            f"brute-force received {len(prices)} items but the combination search "
+            f"is only safe for ≤{_MAX_BRUTE_FORCE_ITEMS} items. "
+            f"Use the two-phase algorithm for longer sequences."
+        )
+        raise ValueError(msg)
+    _LOG.debug(
+        "get_cheapest_periods_python: n=%d, min_sel=%d, aggressive=%s",
+        len(prices), min_selections, aggressive,
+    )
     price_items: tuple[tuple[int, Decimal], ...] = tuple(enumerate(prices))
     cheap_items: tuple[tuple[int, Decimal], ...] = tuple(
         (index, price) for index, price in price_items if price <= low_price_threshold

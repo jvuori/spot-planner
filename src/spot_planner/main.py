@@ -1,9 +1,17 @@
+import logging as _logging
 from decimal import Decimal
-from itertools import combinations as _combinations
 from typing import Sequence
 
 # Import two-phase algorithm which handles both short and long sequences
 from spot_planner import two_phase
+
+_LOG = _logging.getLogger(__name__)
+
+# Maximum number of consecutive cheap-item groups that _try_add_cheap_items will
+# enumerate via bitmask.  Each additional group doubles the search space:
+# 2^20 ≈ 1 M iterations is an acceptable upper bound; anything beyond that is a
+# sign of unexpected input and we raise immediately instead of hanging forever.
+_MAX_CHEAP_GROUPS = 20
 
 
 def get_cheapest_periods(
@@ -145,12 +153,19 @@ def _try_add_cheap_items(
 ) -> list[int]:
     """Augment result by adding remaining below-threshold items without any bridge items.
 
-    After the base algorithm produces a valid selection, tries all combinations of the
+    After the base algorithm produces a valid selection, tries all subsets of the
     remaining below-threshold items (those not in result with price <= threshold).
-    For each combination the full merged set is validated against all constraints —
+    For each subset the full merged set is validated against all constraints —
     no items above the threshold are added as bridges.
 
-    Returns the selection with the most items added; ties broken by lowest average cost.
+    Implementation uses a group-bitmask approach:
+      1. Group remaining cheap items into maximal consecutive runs ("groups").
+      2. Try all 2^num_groups subsets of *whole groups* — O(2^G) instead of the
+         exponential O(C(n, k)) that the naive combinations approach gives.
+      3. Return the subset that adds the most items; ties broken by lowest avg cost.
+
+    A hard limit of _MAX_CHEAP_GROUPS groups is enforced.  If that limit is
+    exceeded the function raises ValueError immediately rather than hanging.
     """
     n = len(prices)
     result_set = set(result)
@@ -162,25 +177,79 @@ def _try_add_cheap_items(
     if not remaining_cheap:
         return result
 
-    # Try subsets from largest to smallest. Return as soon as the maximum valid
-    # size is found. Among same-size valid combos, prefer lowest average cost.
-    for size in range(len(remaining_cheap), 0, -1):
-        best_candidate: list[int] | None = None
-        best_avg = Decimal("inf")
-        for combo in _combinations(remaining_cheap, size):
-            candidate = sorted(result + list(combo))
-            if two_phase._validate_full_selection(
-                candidate,
-                n,
-                min_consecutive_periods,
-                max_gap_between_periods,
-                max_gap_from_start,
-            ):
-                avg = sum(prices[i] for i in candidate) / len(candidate)
-                if avg < best_avg:
-                    best_avg = avg
-                    best_candidate = candidate
-        if best_candidate is not None:
-            return best_candidate
+    # ------------------------------------------------------------------
+    # Group remaining cheap items into maximal consecutive runs.
+    # ------------------------------------------------------------------
+    groups: list[list[int]] = []
+    g: list[int] = [remaining_cheap[0]]
+    for i in range(1, len(remaining_cheap)):
+        if remaining_cheap[i] == remaining_cheap[i - 1] + 1:
+            g.append(remaining_cheap[i])
+        else:
+            groups.append(g)
+            g = [remaining_cheap[i]]
+    groups.append(g)
+
+    num_groups = len(groups)
+    _LOG.debug(
+        "_try_add_cheap_items: n=%d, base_result=%d items, "
+        "remaining_cheap=%d items in %d groups",
+        n, len(result), len(remaining_cheap), num_groups,
+    )
+
+    # -----------------------------------------------------------------------
+    # Safety guard: if there are too many groups the bitmask search would take
+    # too long.  Crash fast rather than hanging the process at 100 % CPU.
+    # -----------------------------------------------------------------------
+    if num_groups > _MAX_CHEAP_GROUPS:
+        msg = (
+            f"_try_add_cheap_items: {num_groups} groups of remaining cheap items "
+            f"exceeds the safety limit of {_MAX_CHEAP_GROUPS} groups "
+            f"(would require up to 2^{num_groups} = {2**num_groups:,} iterations). "
+            f"n={n}, remaining_cheap={len(remaining_cheap)}. "
+            f"This is a bug — the base algorithm should have consumed more items."
+        )
+        raise ValueError(msg)
+
+    # ------------------------------------------------------------------
+    # Exhaustively enumerate all 2^num_groups non-empty subsets of whole
+    # groups via bitmask.  For cheap_day with 16 groups this is only
+    # 65 536 iterations instead of C(40, k) for k = 40..1 which is
+    # astronomically larger.
+    # ------------------------------------------------------------------
+    best_candidate: list[int] | None = None
+    best_items_added = 0
+    best_avg = Decimal("inf")
+
+    for mask in range(1, 1 << num_groups):
+        candidate = list(result)
+        items_added = 0
+        for gi, grp in enumerate(groups):
+            if mask & (1 << gi):
+                candidate.extend(grp)
+                items_added += len(grp)
+        candidate.sort()
+
+        if not two_phase._validate_full_selection(
+            candidate, n, min_consecutive_periods, max_gap_between_periods, max_gap_from_start
+        ):
+            continue
+
+        if items_added > best_items_added:
+            best_items_added = items_added
+            best_avg = sum(prices[i] for i in candidate) / len(candidate)
+            best_candidate = candidate
+        elif items_added == best_items_added:
+            avg = sum(prices[i] for i in candidate) / len(candidate)
+            if avg < best_avg:
+                best_avg = avg
+                best_candidate = candidate
+
+    if best_candidate is not None:
+        _LOG.debug(
+            "_try_add_cheap_items: added %d cheap items → total %d selected",
+            best_items_added, len(best_candidate),
+        )
+        return best_candidate
 
     return result
