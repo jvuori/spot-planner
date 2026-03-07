@@ -12,20 +12,62 @@ from dataclasses import dataclass
 from decimal import Decimal
 from typing import Sequence
 
-# Import the Rust implementation
+# Import the Rust implementation.
 # Note: The Rust extension module is part of the package itself, so we use
 # a relative import. This is an exception to the fully-qualified import rule
 # because compiled extensions that share the package name cannot be imported
 # using fully qualified syntax from within the package.
-try:
-    from . import spot_planner as _rust_module  # type: ignore[import-untyped]
+from . import spot_planner as _rust_module  # type: ignore[import-untyped]
 
-    _RUST_AVAILABLE = True
-except ImportError:
-    _RUST_AVAILABLE = False
 
-# Import Python brute-force implementation
-from spot_planner import brute_force
+def _is_valid_combination(
+    combination: tuple[tuple[int, Decimal], ...],
+    min_consecutive_periods: int,
+    max_gap_between_periods: int,
+    max_gap_from_start: int,
+    full_length: int,
+) -> bool:
+    """Validate a combination of (index, price) pairs against the scheduling constraints.
+
+    Returns True only when every constraint is satisfied:
+    - First selected index is within max_gap_from_start and max_gap_between_periods
+    - No gap between adjacent selected indices exceeds max_gap_between_periods
+    - Every consecutive block (except the last one when it ends at the final item)
+      has at least min_consecutive_periods periods
+    - The last selected index is not more than max_gap_between_periods from the end
+    """
+    if not combination:
+        return False
+
+    indices = [index for index, _ in combination]
+
+    if indices[0] > max_gap_from_start:
+        return False
+    if indices[0] > max_gap_between_periods:
+        return False
+    if (full_length - 1 - indices[-1]) > max_gap_between_periods:
+        return False
+
+    block_length = 1
+    for i in range(1, len(indices)):
+        gap = indices[i] - indices[i - 1] - 1
+        if gap > max_gap_between_periods:
+            return False
+        if indices[i] == indices[i - 1] + 1:
+            block_length += 1
+        else:
+            if block_length < min_consecutive_periods:
+                return False
+            block_length = 1
+
+    # The last block's min_consecutive_periods is not enforced when it ends at the
+    # final item: future prices might extend the block beyond the current window.
+    last_index = indices[-1]
+    is_at_end = last_index == full_length - 1
+    if not is_at_end and block_length < min_consecutive_periods:
+        return False
+
+    return True
 
 
 def _get_cheapest_periods(
@@ -38,10 +80,7 @@ def _get_cheapest_periods(
     aggressive: bool = True,
 ) -> list[int]:
     """
-    Internal dispatcher that chooses between Rust and Python brute-force implementations.
-
-    This function validates input parameters and dispatches to either the Rust
-    implementation (if available) or the Python fallback.
+    Dispatch brute-force calculation to the Rust implementation.
 
     Note: This function is only for sequences <= 28 items. For longer sequences,
     use get_cheapest_periods_extended().
@@ -83,30 +122,18 @@ def _get_cheapest_periods(
         msg = "max_gap_from_start must be less than or equal to max_gap_between_periods"
         raise ValueError(msg)
 
-    if _RUST_AVAILABLE:
-        # Use Rust implementation - convert Decimal objects to strings
-        prices_str = [str(price) for price in prices]
-        low_price_threshold_str = str(low_price_threshold)
-        return _rust_module.get_cheapest_periods(
-            prices_str,
-            low_price_threshold_str,
-            min_selections,
-            min_consecutive_periods,
-            max_gap_between_periods,
-            max_gap_from_start,
-            aggressive,
-        )
-    else:
-        # Fallback to Python implementation
-        return brute_force.get_cheapest_periods_python(
-            prices,
-            low_price_threshold,
-            min_selections,
-            min_consecutive_periods,
-            max_gap_between_periods,
-            max_gap_from_start,
-            aggressive,
-        )
+    # Use Rust implementation — convert Decimal objects to strings for the Rust bridge.
+    prices_str = [str(price) for price in prices]
+    low_price_threshold_str = str(low_price_threshold)
+    return _rust_module.get_cheapest_periods(
+        prices_str,
+        low_price_threshold_str,
+        min_selections,
+        min_consecutive_periods,
+        max_gap_between_periods,
+        max_gap_from_start,
+        aggressive,
+    )
 
 
 @dataclass

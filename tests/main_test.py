@@ -2,8 +2,8 @@ from decimal import Decimal
 
 import pytest
 
-from spot_planner.brute_force import _is_valid_combination
 from spot_planner.main import get_cheapest_periods
+from spot_planner.two_phase import _is_valid_combination
 
 PRICE_DATA = [
     Decimal("50"),  # 0
