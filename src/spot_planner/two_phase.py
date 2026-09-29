@@ -1220,12 +1220,13 @@ def get_cheapest_periods_extended(
 
         # Determine forced prefix selections and adjusted constraints
         forced_prefix_length = 0
-        # If no selections have been made yet, we're still constrained by
-        # max_gap_from_start (distance from sequence start to first selection).
-        # Once at least one selection exists, subsequent gaps use
-        # max_gap_between_periods.
+        # While nothing is selected yet, the budget is max_gap_from_start measured
+        # from the sequence start. It must be measured globally: using only the
+        # previous chunk's trailing unselected count forgets earlier skipped chunks
+        # when several consecutive leading chunks have target=0, and nothing later
+        # repairs a start gap violation.
         if not all_selected:
-            adjusted_max_gap_start = max_gap_from_start
+            adjusted_max_gap_start = max(0, max_gap_from_start - chunk_start)
         else:
             adjusted_max_gap_start = max_gap_between_periods
 
@@ -1241,13 +1242,12 @@ def get_cheapest_periods_extended(
                     chunk_len,
                 )
 
-            # Adjust max_gap_from_start based on trailing unselected
-            if prev_state.trailing_unselected_count > 0:
-                gap_base = (
-                    max_gap_from_start if not all_selected else max_gap_between_periods
-                )
+            # Adjust the between-selection budget based on trailing unselected.
+            # Gaps spanning several skipped chunks are repaired by the bridging
+            # pass after all chunks are processed.
+            if all_selected and prev_state.trailing_unselected_count > 0:
                 adjusted_max_gap_start = max(
-                    0, gap_base - prev_state.trailing_unselected_count
+                    0, max_gap_between_periods - prev_state.trailing_unselected_count
                 )
 
         # Calculate target selections for this chunk based on rough planning
@@ -1258,13 +1258,12 @@ def get_cheapest_periods_extended(
         if target > 0:
             target = max(target, min_consecutive_periods)
 
-        # For chunks with target=0, allow skipping if gap constraints permit
-        if target == 0:
-            if chunk_idx == 0 and chunk_idx + 1 < num_chunks:
-                next_chunk_start = (chunk_idx + 1) * MAX_CHUNK_SIZE
-                if next_chunk_start > max_gap_from_start:
-                    # Can't skip - would violate max_gap_from_start
-                    target = min(min_consecutive_periods, chunk_len)
+        # For chunks with target=0 before the first selection, allow skipping only
+        # if max_gap_from_start reaches past this chunk; otherwise the first
+        # selection must be placed in this chunk.
+        if target == 0 and not all_selected and chunk_idx + 1 < num_chunks:
+            if adjusted_max_gap_start < chunk_len:
+                target = min(min_consecutive_periods, chunk_len)
 
         # Respect forced prefix requirement
         target = max(target, forced_prefix_length)
