@@ -118,7 +118,12 @@ def get_cheapest_periods(
             max_gap_between_periods,
             max_gap_from_start,
         )
-        return _try_add_cheap_items(
+        result = _try_add_cheap_items(
+            result, prices, low_price_threshold,
+            min_consecutive_periods, max_gap_between_periods, max_gap_from_start,
+        )
+        # Last step, so the cheap items added above are never traded away.
+        return two_phase._shift_expensive_run_edges(
             result, prices, low_price_threshold,
             min_consecutive_periods, max_gap_between_periods, max_gap_from_start,
         )

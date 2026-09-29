@@ -192,6 +192,66 @@ def _validate_full_selection(
     return True
 
 
+def _shift_expensive_run_edges(
+    selected_indices: list[int],
+    prices: Sequence[Decimal],
+    low_price_threshold: Decimal,
+    min_consecutive_periods: int,
+    max_gap_between_periods: int,
+    max_gap_from_start: int,
+) -> list[int]:
+    """Replace above-threshold run edges with cheaper items on the other side.
+
+    Chunk-local planning can pad a run of cheap items with an expensive edge item
+    (e.g. a price spike at a chunk boundary) when the unselected neighbour on the
+    run's other side is cheaper. Shifting the run by one item keeps the item count
+    and never removes a below-threshold item, so each accepted shift strictly
+    lowers the total cost. Only shifts that keep the full selection valid are
+    applied; an invalid input selection is returned unchanged.
+    """
+    n = len(prices)
+    result = sorted(selected_indices)
+    if not _validate_full_selection(
+        result, n, min_consecutive_periods, max_gap_between_periods, max_gap_from_start
+    ):
+        return result
+
+    while True:
+        runs: list[tuple[int, int]] = []
+        run_start = result[0]
+        for prev, cur in zip(result, result[1:]):
+            if cur != prev + 1:
+                runs.append((run_start, prev))
+                run_start = cur
+        runs.append((run_start, result[-1]))
+
+        # (saving, removed, added) for every valid one-item shift
+        best: tuple[Decimal, int, int] | None = None
+        for start, end in runs:
+            for removed, added in ((end, start - 1), (start, end + 1)):
+                if not 0 <= added < n:
+                    continue
+                if prices[removed] <= low_price_threshold:
+                    continue
+                saving = prices[removed] - prices[added]
+                if saving <= 0 or (best is not None and saving <= best[0]):
+                    continue
+                candidate = sorted((set(result) - {removed}) | {added})
+                if _validate_full_selection(
+                    candidate,
+                    n,
+                    min_consecutive_periods,
+                    max_gap_between_periods,
+                    max_gap_from_start,
+                ):
+                    best = (saving, removed, added)
+
+        if best is None:
+            return result
+        _, removed, added = best
+        result = sorted((set(result) - {removed}) | {added})
+
+
 def _calculate_chunk_boundary_state(
     chunk_selected: list[int], chunk_length: int
 ) -> ChunkBoundaryState:
