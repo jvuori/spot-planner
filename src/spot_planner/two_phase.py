@@ -252,6 +252,61 @@ def _shift_expensive_run_edges(
         result = sorted((set(result) - {removed}) | {added})
 
 
+def _trim_expensive_run_edges(
+    selected_indices: list[int],
+    prices: Sequence[Decimal],
+    low_price_threshold: Decimal,
+    min_selections: int,
+    min_consecutive_periods: int,
+    max_gap_between_periods: int,
+    max_gap_from_start: int,
+) -> list[int]:
+    """Drop surplus above-threshold items from the edges of runs.
+
+    Rough planning selects whole 4-item groups and passes them to the chunks as
+    counts, so a run can end up padded with above-threshold items that neither
+    min_selections nor any gap constraint needs (e.g. a cheap run extended into
+    a rising price ramp, or a 4-item bridge where min_consecutive_periods is 2).
+    Removes the most expensive such edge item, one at a time, while the
+    selection stays valid and keeps at least min_selections items. Never removes
+    a below-threshold item; an invalid input selection is returned unchanged.
+    """
+    n = len(prices)
+    result = sorted(selected_indices)
+    if not _validate_full_selection(
+        result, n, min_consecutive_periods, max_gap_between_periods, max_gap_from_start
+    ):
+        return result
+
+    while len(result) > min_selections:
+        selected = set(result)
+        edges = sorted(
+            (
+                i
+                for i in result
+                if prices[i] > low_price_threshold
+                and (i - 1 not in selected or i + 1 not in selected)
+            ),
+            key=lambda i: prices[i],
+            reverse=True,
+        )
+        for edge in edges:
+            candidate = [i for i in result if i != edge]
+            if _validate_full_selection(
+                candidate,
+                n,
+                min_consecutive_periods,
+                max_gap_between_periods,
+                max_gap_from_start,
+            ):
+                result = candidate
+                break
+        else:
+            return result
+
+    return result
+
+
 def _calculate_chunk_boundary_state(
     chunk_selected: list[int], chunk_length: int
 ) -> ChunkBoundaryState:
